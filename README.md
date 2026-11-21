@@ -38,7 +38,7 @@ Index build: Qwen3-Embedding-0.6B 655 docs/s; bge-base-en-v1.5 1928 docs/s; bge-
 ### Two-hop retrieval (LangGraph planner node)
 
 <!-- BEGIN:multihop -->
-Second hop for bridge questions: the generator (Qwen3-8B) reads the top 5 first-hop passages and names the missing article or says NONE; a second hybrid + rerank pass runs on that query and its top 1 hits are spliced in after the first 2 first-hop hits (splice and planner context chosen on dev).
+Second hop for bridge questions: the generator (Qwen3-8B) reads the top 5 first-hop passages and names the Wikipedia article still missing; a second hybrid + rerank pass runs on that title and its top 1 hit is spliced in after the first 2 first-hop hits (planner context and splice chosen on dev; follow-up issued = planner output parsed as a title).
 
 | Suite | Questions | Single hop Recall@10 | Two hop Recall@10 | Bridge Recall@10 | Both hops@10 | Follow-up issued |
 |---|---|---|---|---|---|---|

@@ -133,9 +133,11 @@ def multihop_block() -> str | None:
     return "\n".join(
         [
             "Second hop for bridge questions: the generator (Qwen3-8B) reads the top "
-            f"{b['plan_k']} first-hop passages and names the missing article or says NONE; a second "
-            f"hybrid + rerank pass runs on that query and its top {b['take']} hits are spliced in after "
-            f"the first {b['keep']} first-hop hits (splice and planner context chosen on dev).",
+            f"{b['plan_k']} first-hop passages and names the Wikipedia article still missing; a second "
+            f"hybrid + rerank pass runs on that title and its top {b['take']} "
+            f"{'hit is' if b['take'] == 1 else 'hits are'} spliced in after the first {b['keep']} "
+            "first-hop hits (planner context and splice chosen on dev; follow-up issued = planner "
+            "output parsed as a title).",
             "",
             table(
                 [
