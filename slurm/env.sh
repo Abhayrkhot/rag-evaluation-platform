@@ -9,7 +9,7 @@ export XDG_CACHE_HOME=$RAG_ROOT/cache TRITON_CACHE_DIR=$RAG_ROOT/cache/triton
 export TORCHINDUCTOR_CACHE_DIR=$RAG_ROOT/cache/inductor PIP_CACHE_DIR=$RAG_ROOT/pip-cache
 export VLLM_CACHE_ROOT=$RAG_ROOT/cache/vllm
 export PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1  # ~/.local has an old torch
-export TRANSFORMERS_VERBOSITY=error HF_DATASETS_DISABLE_PROGRESS_BARS=1 TOKENIZERS_PARALLELISM=false
+export TRANSFORMERS_VERBOSITY=error HF_DATASETS_DISABLE_PROGRESS_BARS=1 TOKENIZERS_PARALLELISM=true
 export no_proxy=localhost,127.0.0.1${no_proxy:+,$no_proxy} NO_PROXY=localhost,127.0.0.1${NO_PROXY:+,$NO_PROXY}
 export RAGEVAL_HOST_LABEL="explorer-$(hostname -s)"
 # The scratch copy is a `git archive` of one commit, recorded in GIT_SHA next to the code.

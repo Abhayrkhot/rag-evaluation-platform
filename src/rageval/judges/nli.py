@@ -112,19 +112,16 @@ class ClassNLI:
         self.entail_idx = labels.get("entailment", 0)
 
     def prob(self, premises: Sequence[str], hypotheses: Sequence[str]) -> np.ndarray:
+        from rageval.models import encode_sorted_batches
+
         torch = self.torch
-        n = len(premises)
-        out = np.zeros(n, dtype=np.float32)
-        pairs = list(zip(premises, hypotheses, strict=True))
-        for idx in _length_sorted_batches(pairs, lambda p: len(p[0]) + len(p[1]), self.batch_size):
-            enc = self.tok(
-                [pairs[i][0] for i in idx],
-                [pairs[i][1] for i in idx],
-                return_tensors="pt",
-                padding=True,
-                truncation="only_first",
-                max_length=self.max_length,
-            ).to(self.device)
+        out = np.zeros(len(premises), dtype=np.float32)
+        if not premises:
+            return out
+        for idx, enc in encode_sorted_batches(
+            self.tok, premises, hypotheses, self.max_length, self.batch_size, "only_first"
+        ):
+            enc = enc.to(self.device)
             with torch.inference_mode():
                 logits = self.model(**enc).logits.float()
             out[idx] = logits.softmax(-1)[:, self.entail_idx].cpu().numpy()
