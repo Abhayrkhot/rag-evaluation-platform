@@ -5,7 +5,8 @@ Kiss and Tell"); the paragraph that holds the answer is about a second entity th
 inside the first paragraph. Single-shot retrieval misses that paragraph whenever the question and
 it share few words. After the first hybrid + rerank pass, the planner LLM reads the top passages
 and names the missing article (or says NONE); a second hybrid + rerank pass runs on that query, and
-its top hits are spliced in right after the first-hop head:
+its top hits are spliced in right after the first-hop head. The planner always names an article
+(an earlier version could answer NONE and declined far too often; see docs/RESULTS_LOG.md):
 
     merged = hop1[:keep] + hop2[:take] + hop1[keep:]   (deduplicated)
 """
@@ -21,11 +22,11 @@ from rageval.corpus import Corpus
 from rageval.llm.client import ChatClient, ChatResult, gather_limited
 from rageval.retrieval.hybrid import HybridRetriever, RetrievalConfig
 
-PLAN_SYSTEM = """You plan searches over Wikipedia for multi-hop questions.
-Given a question and the passages retrieved so far, decide whether another Wikipedia article is needed to answer it.
-If one is needed, reply with a short search query for that article, usually the name of the entity it is about.
-If the passages already contain everything needed, reply NONE.
-Reply with the query or NONE only, on one line."""
+PLAN_SYSTEM = """You plan searches over Wikipedia to answer multi-hop questions.
+Most questions need two articles: one about an entity named in the question, and one about a second entity that is only identified through the first (for example, the inventor of a product named in the question, or the director of a film named in the question).
+Read the question and the passages already retrieved, then reply with the title of the Wikipedia article that is still missing.
+If the passages already cover every entity the question depends on, reply with the title of the article about the entity whose fact the question asks for.
+Use what the passages say to identify the second entity. Reply with the title only, on one line."""
 
 
 def plan_messages(question: str, docs: Sequence[tuple[str, str]]) -> list[dict[str, str]]:
