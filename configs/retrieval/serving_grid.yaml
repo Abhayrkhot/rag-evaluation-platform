@@ -1,0 +1,9 @@
+# Serving profiles: cheaper reranking that fits 50 QPS on a shared GPU. Scored on dev, test and full
+# with the dev-selected embedder; one profile is picked for the load tests using dev recall and the
+# measured encoder throughput (scripts/m4_prep.sh).
+- {family: serve_rrf, fusion: rrf, rrf_k: 60, dense_index: hnsw}
+- {family: serve_w07, fusion: weighted, alpha: 0.7, dense_index: hnsw}
+- {family: serve_w07_d20, fusion: weighted, alpha: 0.7, dense_index: hnsw, rerank_depth: 20}
+- {family: serve_w07_d30, fusion: weighted, alpha: 0.7, dense_index: hnsw, rerank_depth: 30}
+- {family: serve_w07_d50, fusion: weighted, alpha: 0.7, dense_index: hnsw, rerank_depth: 50}
+- {family: serve_w07_d100, fusion: weighted, alpha: 0.7, dense_index: hnsw, rerank_depth: 100}

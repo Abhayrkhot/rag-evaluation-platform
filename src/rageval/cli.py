@@ -687,6 +687,79 @@ def gen_report(
     _echo(brief)
 
 
+bench_app = typer.Typer(no_args_is_help=True, help="Micro-benchmarks")
+app.add_typer(bench_app, name="bench")
+
+
+@bench_app.command("encoders")
+def bench_encoders(
+    out: Annotated[Path, typer.Option()],
+    candidates: Annotated[
+        Path, typer.Option(help="cached candidates for realistic query/doc pairs")
+    ],
+    suite: Annotated[Path, typer.Option()] = Path("data/hotpot100k/dev.jsonl"),
+    corpus: Annotated[Path, typer.Option()] = Path("data/hotpot100k/corpus.jsonl"),
+    reranker: Annotated[list[str] | None, typer.Option()] = None,
+    embedder: Annotated[list[str] | None, typer.Option()] = None,
+    verifier: Annotated[list[str] | None, typer.Option()] = None,
+    pairs: int = 6000,
+    batch: Annotated[list[int] | None, typer.Option()] = None,
+) -> None:
+    """GPU throughput of the serving encoders on realistic inputs (pairs/s, queries/s)."""
+    import time
+
+    import torch
+
+    from rageval.corpus import Corpus, load_suite
+    from rageval.judges.nli import ClassNLI
+    from rageval.models import HFCrossEncoder, HFEmbedder
+    from rageval.retrieval.dense import format_query
+    from rageval.retrieval.experiments import load_candidates
+
+    c = Corpus.load(corpus)
+    qs = {q.qid: q for q in load_suite(suite)}
+    cands = load_candidates(candidates)
+    pp: list[tuple[str, str]] = []
+    for qid, cc in cands.items():
+        for h in cc["hnsw"][:50]:
+            pp.append((qs[qid].question, c.index_text(h.doc_id)))
+    pp = pp[:pairs]
+    res: dict[str, Any] = {
+        "pairs": len(pp),
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
+    }
+
+    def timeit(fn: Any, items: list[Any]) -> float:
+        fn(items[:256])  # warm-up
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
+        fn(items)
+        torch.cuda.synchronize()
+        return len(items) / (time.perf_counter() - t0)
+
+    for m in reranker or []:
+        for b in batch or [64, 128, 256]:
+            ce = HFCrossEncoder(m, batch_size=b)
+            res[f"rerank/{m}/b{b}"] = round(timeit(ce.score, pp), 1)
+            del ce
+            torch.cuda.empty_cache()
+    for m in embedder or []:
+        emb = HFEmbedder(m, batch_size=64)
+        qtexts = [format_query(m, q.question) for q in qs.values()] * 4
+        res[f"embed_queries/{m}"] = round(timeit(emb.embed, qtexts), 1)
+        del emb
+    for m in verifier or []:
+        nli = ClassNLI(m, batch_size=128)
+
+        def nli_score(x: list[tuple[str, str]], model: ClassNLI = nli) -> Any:
+            return model.prob([a for a, _ in x], [b for _, b in x])
+
+        res[f"nli/{m}"] = round(timeit(nli_score, [(d, q) for q, d in pp]), 1)
+        del nli
+    write_json(out, {"meta": run_meta(), **res})
+    _echo(res)
+
+
 # ---------------------------------------------------------------- serving / load
 
 
