@@ -300,6 +300,40 @@ def ret_select(
     _echo({k: payload[k] for k in ("selected", "best_dev_recall@10")})
 
 
+@ret_app.command("materialize")
+def ret_materialize(
+    selected: Annotated[Path, typer.Option()],
+    models_template: Annotated[Path, typer.Option()],
+    pipelines_template: Annotated[Path, typer.Option()],
+    out_dir: Annotated[Path, typer.Option()],
+    ef_search: int = 256,
+) -> None:
+    """Fill the dev-selected embedder, reranker and retrieval config into config templates
+    (__EMBEDDER__, __RERANKER__, __RETRIEVAL__), and keep the filled copies with the results."""
+    from rageval.retrieval.dense import FORMATS
+    from rageval.retrieval.experiments import slug
+
+    sel = read_json(selected)["selected"]
+    by_slug = {slug(m): m for m in FORMATS}
+    embedder = by_slug[sel["embedder_slug"]]
+    cfg = {k: v for k, v in sel["config"].items() if k not in ("family", "dense_index")}
+    cfg["rerank"] = int(cfg.get("rerank_depth", 0) or 0) > 0
+    cfg["ef_search"] = ef_search
+    retrieval = json.dumps(cfg, sort_keys=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    m = (
+        models_template.read_text()
+        .replace("__EMBEDDER__", embedder)
+        .replace("__RERANKER__", sel["reranker"] or "null")
+    )
+    m = m.replace("dense_index: hnsw", f"dense_index: {sel['config'].get('dense_index', 'hnsw')}")
+    (out_dir / "models.yaml").write_text(m)
+    (out_dir / "pipelines.yaml").write_text(
+        pipelines_template.read_text().replace("__RETRIEVAL__", retrieval)
+    )
+    _echo({"embedder": embedder, "reranker": sel["reranker"], "retrieval": cfg})
+
+
 # ---------------------------------------------------------------- generation / judging
 
 gen_app = typer.Typer(no_args_is_help=True, help="Offline generation and judging")

@@ -5,14 +5,17 @@
 # NLI verifier, then the TRUE NLI judge in parallel with the LLM judge. 1 GPU: all sequential.
 set -euo pipefail
 source slurm/serve.sh
-suite=$1; pipes=$2; tag=$3; shift 3
+suite=$1; pipes_tmpl=$2; tag=$3; shift 3
 R=results/m2; mkdir -p "$R"
+in_image python3 -m rageval.cli retrieval materialize --selected results/m1/selected.json \
+  --models-template configs/models.yaml --pipelines-template "$pipes_tmpl" --out-dir "$R/${tag}_cfg"
+pipes=$R/${tag}_cfg/pipelines.yaml; models=$R/${tag}_cfg/models.yaml
 NGPU=$(nvidia-smi -L | wc -l)
 if [ "$NGPU" -gt 1 ]; then GEN=0; AUX=1; UTIL=0.9; else GEN=0; AUX=0; UTIL=0.55; fi
 cli() { in_image python3 -m rageval.cli "$@"; }
 
 start_vllm Qwen/Qwen3-8B 8000 "$GEN" --max-model-len 8192 --gpu-memory-utilization "$UTIL" --seed 0
-CUDA_VISIBLE_DEVICES=$AUX cli gen run --suite "$suite" --pipelines "$pipes" --models configs/models.yaml \
+CUDA_VISIBLE_DEVICES=$AUX cli gen run --suite "$suite" --pipelines "$pipes" --models "$models" \
   --out "$R/${tag}_gen.jsonl" --concurrency 192 "$@"
 stop_vllms
 
