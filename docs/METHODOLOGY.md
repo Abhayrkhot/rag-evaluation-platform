@@ -77,3 +77,36 @@ Every compared configuration answers the same questions with the same retrieved 
   queueing delay is never hidden (no coordinated omission).
 - 30 s warm-up excluded; each condition runs on a freshly started API process.
 - Conditions are interleaved across seeds so cache and thermal state cannot favour one side.
+
+## Grounded generation and citation verification (`src/rageval/generation/`)
+
+- Prompts: `naive` (answer and cite), and three strategies that share the same citation rules
+  (one fact per sentence, cite every source a sentence uses, no pronouns, abstain with a fixed
+  sentence when the documents are insufficient): `zero_shot`, `few_shot` (three HotpotQA *train*
+  exemplars: bridge, comparison, unanswerable) and `cot` (reasoning in `<reasoning>`, answer in
+  `<answer>`; only the answer is scored).
+- Verification (`verify.py`), per factual sentence, with an NLI model in the pipeline:
+  1. if the cited documents entail it, drop unnecessary citations (ALCE's definition);
+  2. otherwise complete the citation with one more context document, then try the best single
+     document, then the best pair; re-citation candidates must share an entity token with the
+     sentence (the search over many candidates otherwise surfaces NLI false positives);
+  3. `revise`: sentences still unsupported go back to the generator once with the list of failing
+     sentences; the rewrite is verified again and whatever still fails is pruned (an empty answer
+     becomes an abstention).
+- Two operating points are fixed on dev and both scored on test: *balanced* (DeBERTa NLI, tau
+  0.9, picked by the rule "highest citation precision whose correctness is within 2 points of the
+  unverified prompt") and *strict* (DeBERTa NLI and MiniCheck must both accept, tau 0.9: highest
+  dev citation precision regardless of correctness). `rageval gen choose` applies these rules.
+- Development history, including the iterations that did not work, is in `docs/RESULTS_LOG.md`.
+
+## Serving (`src/rageval/serve/`, `scripts/m4_load.sh`)
+
+- Every model runs in its own server process: vLLM for the primary (Qwen3-8B) and fallback
+  (Qwen3-1.7B) generators and for the embedder and reranker (pooling runner; parity with the HF
+  models used offline is checked before every load test, `rageval bench parity`), and micro-batched
+  `rageval encoders serve` replicas for the DeBERTa verifier (not supported by vLLM). The agent API
+  runs several uvicorn workers that call them over HTTP.
+- Static routing: every request takes the full serving pipeline on the primary model. Adaptive:
+  the router's overflow, deadline, hedging, breaker and retry policies, plus shedding of reranking
+  or verification when the deadline is close or that stage already has too many requests in flight.
+  Thresholds (per API worker) were set from the capacity probes, not from the measured runs.

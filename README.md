@@ -90,7 +90,12 @@ fallback, the agent API, Jaeger, Prometheus, Grafana).
 ## Limitations
 
 <!-- BEGIN:limitations -->
-_Pending: results not generated yet._
+- One dataset. Every number is on a 100K-paragraph corpus built from HotpotQA (Wikipedia intro paragraphs). It contains each validation question's hard negatives but is far smaller than full Wikipedia, and Qwen3 has likely seen HotpotQA, so parametric knowledge can leak into answers. The unsupported-claims judge sees only the retrieved documents, so leaked facts count against the pipeline rather than for it.
+- Model judges, no human labels. Citation metrics use TRUE (T5-11B NLI), as ALCE does; unsupported claims and correctness use gpt-oss-120b. Both are models with their own errors. The pipeline's verifier (DeBERTa NLI, optionally with MiniCheck) is a different model from both judges, and the strict operating point's gain also shows up in the gpt-oss judge, but no human agreement study was run.
+- Small dev set. Every choice (fusion, depth, splice, K, prompt, verifier threshold) was made on 250 dev questions (200 answerable), so the dev picks are noisy; the test suite and the 7,018-question full set were each scored once with the frozen choices.
+- Precision vs correctness. The strict citation operating point prunes more aggressively and answers fewer questions correctly than the balanced one; both are reported.
+- Serving profile differs from the best offline pipeline. Two-hop retrieval, 10-document contexts and the revision round cost extra LLM calls, so the 50 QPS deployment serves a latency profile (single hop, ModernBERT reranker at depth 30, 5 documents, NLI repair without revision) whose retrieval recall is reported in its own section.
+- Hardware-specific latency. The load tests run on two H200s (one primary Qwen3-8B, one GPU shared by the fallback model and the encoders) with a single-node API; the fallback GPU is idle under static routing, which is part of what routing exploits. Results will differ on other hardware.
 <!-- END:limitations -->
 
 ## Layout
