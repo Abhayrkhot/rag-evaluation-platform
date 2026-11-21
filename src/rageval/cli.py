@@ -1129,6 +1129,56 @@ def loadtest_to_records(
     _echo({"out": str(out), "records": len(recs)})
 
 
+@lt_app.command("calibrate")
+def loadtest_calibrate(
+    sweep_dir: Annotated[
+        Path, typer.Option(help="a static-routing sweep run below the target load")
+    ],
+    out: Annotated[Path, typer.Option()],
+    target_qps: float = 50.0,
+    workers: int = 4,
+    headroom: float = 1.5,
+) -> None:
+    """Router thresholds from a capacity-sweep run (never from the measured runs):
+    max_inflight per worker = headroom x target_qps x mean generation latency / workers,
+    hedge_ms = generation p95, budget_ms = 3 x end-to-end p95."""
+    import math
+
+    import numpy as np
+
+    from rageval.io import read_jsonl
+
+    summ = read_json(sweep_dir / "load.summary.json")
+    rows = [
+        r
+        for r in read_jsonl(sweep_dir / "load.jsonl")
+        if r.get("status") == 200 and r["at"] >= summ.get("warmup_s", 30)
+    ]
+    gen = np.array(
+        [
+            r["timings_ms"]["generate"]
+            for r in rows
+            if r.get("timings_ms", {}).get("generate") is not None
+        ]
+    )
+    e2e = np.array([r["latency_ms"] for r in rows])
+    calib = {
+        "from": str(sweep_dir),
+        "sweep_qps": summ["offered_qps"],
+        "gen_mean_ms": float(gen.mean()),
+        "gen_p95_ms": float(np.percentile(gen, 95)),
+        "e2e_p95_ms": float(np.percentile(e2e, 95)),
+        "max_inflight": max(4, math.ceil(headroom * target_qps * gen.mean() / 1e3 / workers)),
+        "hedge_ms": round(float(np.percentile(gen, 95))),
+        "budget_ms": round(3 * float(np.percentile(e2e, 95))),
+        "target_qps": target_qps,
+        "workers": workers,
+        "headroom": headroom,
+    }
+    write_json(out, {"meta": run_meta(), **calib})
+    _echo(calib)
+
+
 @lt_app.command("compare")
 def loadtest_compare(
     base: Annotated[list[Path], typer.Option(help="baseline run dirs (one per seed)")],

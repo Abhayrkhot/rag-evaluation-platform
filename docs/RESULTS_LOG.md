@@ -46,3 +46,9 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   the strict 0.9 threshold, and DeBERTa false positives even at 0.9. Iteration 4: wider abstention
   patterns, minimisation at the NLI decision threshold (0.5), and an ensemble gate with MiniCheck
   (DeBERTa-v3-large, Tang et al. 2024) that must agree with the NLI model.
+- **M4 main, BF16 primary** (archived as `results/explorer/m4/main_bf16_overloaded`, not used for
+  claims). With the encoders fixed, the BF16 Qwen3-8B primary (sharing GPU0 with two NLI replicas)
+  saturated between 30 and 40 QPS: static routing at 50 QPS had a growing queue (p95 165 s), and
+  adaptive routing with hand-set thresholds sent 89% of traffic to the 1.7B fallback (p95 5.8 s).
+  Neither number is meaningful. Next: FP8 primary alone on GPU0, NLI replicas on GPU1, and router
+  thresholds calibrated from the 40 QPS sweep point (`rageval loadtest calibrate`).

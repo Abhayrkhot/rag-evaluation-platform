@@ -22,18 +22,18 @@ nvidia-smi --query-gpu=index,name,memory.total --format=csv > "$R/gpus.csv"
 echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER agent=$AGENT" > "$R/layout.txt"
 
 QARGS=(); [ "$PRECISION" = fp8 ] && QARGS=(--quantization fp8)
-start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization 0.82 --seed 0 "${QARGS[@]}"
-start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.3 --seed 0
+start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization 0.9 --seed 0 "${QARGS[@]}"
+start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.25 --seed 0
 
 # encoders on GPU1: embedder and reranker served by vLLM's pooling runner (CUDA graphs, unpadded
 # batches); the NLI verifier (DeBERTa, not supported by vLLM) in its own micro-batched process.
 start_vllm "$EMB" 8101 1 --runner pooling --max-model-len 512 --gpu-memory-utilization 0.06
 start_vllm "$RERANKER" 8102 1 --runner pooling --max-model-len 4096 --gpu-memory-utilization 0.08 \
   --max-num-batched-tokens 131072 --max-num-seqs 1024
-# NLI verifier replicas (DeBERTa-v3-large is compute-heavy): two on GPU0 beside the primary, one on GPU1
+# NLI verifier replicas (DeBERTa-v3-large is compute-heavy), all on GPU1 so GPU0 serves only the primary
 ENC_PIDS=()
 NLI_URLS=""
-for spec in 0:8103 0:8104 1:8105; do
+for spec in ${NLI_SPECS:-1:8103 1:8104 1:8105}; do
   g=${spec%%:*}; port=${spec##*:}
   ENC_PIDS+=($(start_bg "enc-nli-$port" "$g" "http://127.0.0.1:$port/health" python3 -m rageval.cli encoders serve --kind nli \
     --model MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli --port "$port" --max-wait-ms "${NLI_WAIT_MS:-6}"))
@@ -75,6 +75,11 @@ for q in $SWEEP; do
 done
 [ "$PHASE" = probe ] && exit 0
 
+# router thresholds calibrated on the static sweep point below the target load (not on the runs below)
+cli loadtest calibrate --sweep-dir "$R/sweep_q${CALIB_QPS:-40}" --out "$R/calibration.json" --workers "$API_WORKERS"
+read -r MAX_INFLIGHT HEDGE_MS BUDGET_MS < <(in_image python3 -c "import json; c=json.load(open('$R/calibration.json')); print(c['max_inflight'], c['hedge_ms'], c['budget_ms'])")
+echo "calibrated: max_inflight=$MAX_INFLIGHT hedge_ms=$HEDGE_MS budget_ms=$BUDGET_MS" | tee -a "$R/layout.txt"
+
 for seed in 1 2 3; do
   order=(static adaptive); [ $((seed % 2)) -eq 0 ] && order=(adaptive static)
   for mode in "${order[@]}"; do
@@ -83,8 +88,8 @@ for seed in 1 2 3; do
       start_api "$tag" --set router=static
     else
       # fallback routing + graceful degradation; thresholds are per API worker (API_WORKERS of them)
-      start_api "$tag" --set "router.max_inflight=${MAX_INFLIGHT:-12}" --set "router.hedge_ms=${HEDGE_MS:-1500}" \
-        --set agent.adaptive=true --set "agent.budget_ms=${BUDGET_MS:-4000}" \
+      start_api "$tag" --set "router.max_inflight=$MAX_INFLIGHT" --set "router.hedge_ms=$HEDGE_MS" \
+        --set agent.adaptive=true --set "agent.budget_ms=$BUDGET_MS" \
         --set "agent.rerank_max_inflight=${RERANK_CAP:-24}" --set "agent.verify_max_inflight=${VERIFY_CAP:-24}"
     fi
     load "$tag" 50 "${DURATION:-240}" "$seed"
