@@ -56,6 +56,10 @@ class AgentConfig(BaseModel):
     adaptive: bool = False  # skip rerank / verify when the deadline is close
     rerank_min_remaining_ms: float = 3000.0
     plan_min_remaining_ms: float = 3500.0  # second hop only when this much budget is left
+    # adaptive load shedding of optional stages (0 = off): skip reranking / verification when this
+    # worker already has that many requests in that stage
+    rerank_max_inflight: int = 0
+    verify_max_inflight: int = 0
     verify_min_remaining_ms: float = 400.0
     revise_min_remaining_ms: float = 1500.0  # one revision round only with this much budget left
     verify_reserve_ms: float = 150.0  # budget held back from generation for verification
@@ -113,6 +117,7 @@ class RAGAgent:
         self.router = router
         self.cfg = config
         self.pool = ThreadPoolExecutor(max_workers=cpu_workers, thread_name_prefix="cpu")
+        self.inflight = {"rerank": 0, "verify": 0}
         self.tracer = trace.get_tracer("rageval.agent")
         self.graph = self._build()
 
@@ -178,7 +183,11 @@ class RAGAgent:
 
     async def n_rerank(self, state: AgentState) -> dict[str, Any]:
         cand = state["fused"][: self.cfg.retrieval.rerank_depth]
-        return {"hits": await self._rerank(state["question"], cand)}
+        self.inflight["rerank"] += 1
+        try:
+            return {"hits": await self._rerank(state["question"], cand)}
+        finally:
+            self.inflight["rerank"] -= 1
 
     async def n_plan(self, state: AgentState) -> dict[str, Any]:
         rc = self.cfg.retrieval
@@ -239,13 +248,17 @@ class RAGAgent:
         return [(self.corpus[d].title, self.corpus[d].text) for d in state["context"]]
 
     async def n_verify(self, state: AgentState) -> dict[str, Any]:
-        parsed, st = await averify_answer(
-            state["parsed"],
-            self._docs(state),
-            self._aprob,
-            tau=self.cfg.verify_tau,
-            policy=self.cfg.verify,
-        )
+        self.inflight["verify"] += 1
+        try:
+            parsed, st = await averify_answer(
+                state["parsed"],
+                self._docs(state),
+                self._aprob,
+                tau=self.cfg.verify_tau,
+                policy=self.cfg.verify,
+            )
+        finally:
+            self.inflight["verify"] -= 1
         bad = [d["text"] for d in st.detail if d.get("unsupported")]
         upd: dict[str, Any] = {
             "parsed": parsed,
@@ -328,6 +341,9 @@ class RAGAgent:
     def e_after_retrieve(self, state: AgentState) -> str:
         if not self.cfg.retrieval.rerank or self.rerank_b is None:
             return "fuse_only"
+        cap = self.cfg.rerank_max_inflight
+        if self.cfg.adaptive and cap and self.inflight["rerank"] >= cap:
+            return "fuse_only"
         rem = self.remaining_ms(state)
         if self.cfg.adaptive and rem is not None and rem < self.cfg.rerank_min_remaining_ms:
             return "fuse_only"
@@ -355,6 +371,9 @@ class RAGAgent:
             return "finalize"
         rem = self.remaining_ms(state)
         if self.cfg.adaptive and rem is not None and rem < self.cfg.verify_min_remaining_ms:
+            return "skip_verify"
+        cap = self.cfg.verify_max_inflight
+        if self.cfg.adaptive and cap and self.inflight["verify"] >= cap:
             return "skip_verify"
         return "verify"
 
