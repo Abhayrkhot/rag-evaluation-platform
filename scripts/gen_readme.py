@@ -361,10 +361,83 @@ def serving_block() -> str | None:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- headline
+
+
+def headline_block() -> str | None:
+    rows: list[list[str]] = []
+    mt, mf = (
+        load(RES / "explorer/m1/multihop_test.json"),
+        load(RES / "explorer/m1/multihop_full.json"),
+    )
+    if mt and mf:
+        rows.append(
+            [
+                "Recall@10, hybrid FAISS + BM25 + reranking, 100K docs",
+                "91%",
+                f"{pct(mf['best']['recall@10'])} two-hop / {pct(mf['baseline_hop1']['recall@10'])} single-hop "
+                f"(7,018 questions); test suite {pct(mt['best']['recall@10'])} / {pct(mt['baseline_hop1']['recall@10'])}",
+            ]
+        )
+    rep, ch = (
+        load(RES / "explorer/m2/test_report.json"),
+        load(RES / "explorer/m2/test_choices.json"),
+    )
+    if rep and ch:
+        S = rep["summary"]
+        rows.append(
+            [
+                "Citation precision, naive RAG -> final pipeline (500-question suite)",
+                "76% -> 94%",
+                f"{pct(S['s0_baseline']['citation_precision'])} -> {pct(S['s4_verified']['citation_precision'])}",
+            ]
+        )
+        z, b = S["zero_shot"], S[ch["best_prompt"]]
+        cut = 1 - b["unsupported_claims_total"] / max(z["unsupported_claims_total"], 1)
+        p = next(
+            (
+                r
+                for r in rep["paired"]
+                if r["a"] == "zero_shot"
+                and r["b"] == ch["best_prompt"]
+                and r["metric"] == "unsupported_count"
+            ),
+            None,
+        )
+        rows.append(
+            [
+                f"Unsupported claims, zero-shot vs {ch['best_prompt']} (paired)",
+                "-32%",
+                f"-{100 * cut:.0f}% ({z['unsupported_claims_total']} -> {b['unsupported_claims_total']})"
+                + (f", Wilcoxon p (Holm) {p['p_holm']:.2g}" if p else ""),
+            ]
+        )
+    cands = (
+        sorted((RES / "explorer/m4").glob("main_*/compare_q50.json"))
+        if (RES / "explorer/m4").exists()
+        else []
+    )
+    if cands:
+        c = load(cands[-1])
+        x = c["p95"]
+        rows.append(
+            [
+                "p95 latency at 50 QPS, static vs fallback routing",
+                "-28%",
+                f"-{100 * x['reduction']:.0f}% ({x['base_ms'] / 1e3:.2f} s -> {x['treat_ms'] / 1e3:.2f} s; "
+                f"95% CI {100 * x['reduction_lo']:.0f} to {100 * x['reduction_hi']:.0f}%)",
+            ]
+        )
+    if not rows:
+        return None
+    return table(["Claim", "Target", "Measured"], rows)
+
+
 # ---------------------------------------------------------------- render
 
 
 BLOCKS = {
+    "headline": headline_block,
     "retrieval": retrieval_block,
     "multihop": multihop_block,
     "grounding": grounding_block,

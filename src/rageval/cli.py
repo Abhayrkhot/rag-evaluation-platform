@@ -563,7 +563,7 @@ def gen_judge_nli(
     records: Annotated[Path, typer.Option()],
     out: Annotated[Path, typer.Option()],
     corpus: Annotated[Path, typer.Option()] = Path("data/hotpot100k/corpus.jsonl"),
-    batch: int = 32,
+    batch: int = 16,
     model: Annotated[
         str | None, typer.Option(help="override the judge model (smoke tests)")
     ] = None,

@@ -5,7 +5,8 @@ VLLM_PIDS=()
 start_vllm() {
   local model=$1 port=$2 gpus=$3; shift 3
   local log="$RAG_ROOT/logs/vllm-${SLURM_JOB_ID:-local}-$(echo "${model##*/}" | tr '[:upper:]' '[:lower:]')-$port.log"
-  CUDA_VISIBLE_DEVICES=$gpus in_image vllm serve "$model" --host 127.0.0.1 --port "$port" \
+  # own session/process group, so stop_vllms can kill vLLM's engine workers too, not just the wrapper
+  CUDA_VISIBLE_DEVICES=$gpus setsid bash -c 'in_image vllm serve "$@"' _ "$model" --host 127.0.0.1 --port "$port" \
     --disable-log-requests --uvicorn-log-level warning "$@" > "$log" 2>&1 &
   local pid=$!
   VLLM_PIDS+=($pid)
@@ -18,9 +19,18 @@ start_vllm() {
   done
 }
 stop_vllms() {
-  for p in "${VLLM_PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
-  for p in "${VLLM_PIDS[@]}"; do wait "$p" 2>/dev/null || true; done
+  for p in "${VLLM_PIDS[@]}"; do kill -TERM -- "-$p" 2>/dev/null || kill -TERM "$p" 2>/dev/null || true; done
+  for p in "${VLLM_PIDS[@]}"; do
+    for _ in $(seq 60); do kill -0 -- "-$p" 2>/dev/null || break; sleep 1; done
+    kill -KILL -- "-$p" 2>/dev/null || true
+  done
   VLLM_PIDS=()
-  sleep 5
+  # wait until this job's GPUs are actually free (engine workers release memory last)
+  for _ in $(seq 60); do
+    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
+    [ "${used:-0}" -lt 2000 ] && break
+    sleep 2
+  done
+  nvidia-smi --query-gpu=index,memory.used --format=csv,noheader
 }
 trap stop_vllms EXIT

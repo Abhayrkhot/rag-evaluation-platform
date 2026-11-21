@@ -66,7 +66,11 @@ class TrueNLI:
             )
             dec = torch.full((len(idx), 1), start, dtype=torch.long, device=self.device)
             with torch.inference_mode():
-                logits = self.model(**enc, decoder_input_ids=dec).logits[:, -1, :].float()
+                logits = (
+                    self.model(**enc, decoder_input_ids=dec, use_cache=False)
+                    .logits[:, -1, :]
+                    .float()
+                )
             two = torch.stack([logits[:, self.yes_id], logits[:, self.no_id]], dim=-1).softmax(-1)[
                 :, 0
             ]

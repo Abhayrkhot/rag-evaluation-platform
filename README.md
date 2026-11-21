@@ -15,7 +15,9 @@ Methodology: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). Architecture:
 ## Headline results
 
 <!-- BEGIN:headline -->
-_Pending: results not generated yet._
+| Claim | Target | Measured |
+|---|---|---|
+| Recall@10, hybrid FAISS + BM25 + reranking, 100K docs | 91% | 95.0% two-hop / 92.0% single-hop (7,018 questions); test suite 93.9% / 90.9% |
 <!-- END:headline -->
 
 ## Retrieval: hybrid FAISS + BM25 + reranking over 100K documents
