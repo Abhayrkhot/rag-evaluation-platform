@@ -1,0 +1,21 @@
+{
+  "embed_queries/BAAI/bge-large-en-v1.5": 1632.9,
+  "gpu": "NVIDIA H200",
+  "meta": {
+    "git_sha": "c04063a01961",
+    "host": "explorer-d4052",
+    "python": "3.12.3",
+    "started_unix": 1795290776.8977685
+  },
+  "nli/MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli": 807.0,
+  "pairs": 6000,
+  "rerank/Alibaba-NLP/gte-reranker-modernbert-base/b128": 997.0,
+  "rerank/Alibaba-NLP/gte-reranker-modernbert-base/b256": 1189.3,
+  "rerank/Alibaba-NLP/gte-reranker-modernbert-base/b64": 783.5,
+  "rerank/BAAI/bge-reranker-v2-m3/b128": 1025.2,
+  "rerank/BAAI/bge-reranker-v2-m3/b256": 1208.0,
+  "rerank/BAAI/bge-reranker-v2-m3/b64": 652.7,
+  "rerank/cross-encoder/ms-marco-MiniLM-L6-v2/b128": 1489.3,
+  "rerank/cross-encoder/ms-marco-MiniLM-L6-v2/b256": 1915.2,
+  "rerank/cross-encoder/ms-marco-MiniLM-L6-v2/b64": 1073.7
+}

@@ -38,7 +38,12 @@ Index build: Qwen3-Embedding-0.6B 655 docs/s; bge-base-en-v1.5 1928 docs/s; bge-
 ### Two-hop retrieval (LangGraph planner node)
 
 <!-- BEGIN:multihop -->
-_Pending: results not generated yet._
+Second hop for bridge questions: the generator (Qwen3-8B) reads the top 5 first-hop passages and names the missing article or says NONE; a second hybrid + rerank pass runs on that query and its top 1 hits are spliced in after the first 2 first-hop hits (splice and planner context chosen on dev).
+
+| Suite | Questions | Single hop Recall@10 | Two hop Recall@10 | Bridge Recall@10 | Both hops@10 | Follow-up issued |
+|---|---|---|---|---|---|---|
+| test | 400 | 90.9% [89.0, 92.8] | 93.9% [92.2, 95.5] | 88.6% -> 92.3% | 82.0% -> 88.0% | 92% |
+| full | 7018 | 92.0% [91.6, 92.5] | 95.0% [94.7, 95.4] | 90.1% -> 93.8% | 84.3% -> 90.3% | 95% |
 <!-- END:multihop -->
 
 ## Grounding: citation precision, stage by stage

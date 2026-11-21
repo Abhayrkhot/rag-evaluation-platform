@@ -1,0 +1,208 @@
+{
+  "baseline_hop1": {
+    "all_recall@10": {
+      "hi": 0.8519521231119978,
+      "lo": 0.8344257623254488,
+      "mean": 0.8432601880877743,
+      "n": 7018
+    },
+    "ndcg@10": {
+      "hi": 0.9020156439815012,
+      "lo": 0.8939322726254768,
+      "mean": 0.897925135370841,
+      "n": 7018
+    },
+    "recall@10": {
+      "hi": 0.9245511541749786,
+      "lo": 0.915714947278427,
+      "mean": 0.9201339412938159,
+      "n": 7018
+    },
+    "recall@10/bridge": {
+      "hi": 0.9058938746438746,
+      "lo": 0.895210113960114,
+      "mean": 0.9006410256410257,
+      "n": 5616
+    },
+    "recall@10/comparison": {
+      "hi": 0.9996433666191156,
+      "lo": 0.9964336661911555,
+      "mean": 0.9982168330955777,
+      "n": 1402
+    },
+    "recall@5": {
+      "hi": 0.8969791963522371,
+      "lo": 0.8868623539469934,
+      "mean": 0.8919207751496153,
+      "n": 7018
+    }
+  },
+  "best": {
+    "all_recall@10": {
+      "hi": 0.9099458535195213,
+      "lo": 0.895839270447421,
+      "mean": 0.9029638073525221,
+      "n": 7018
+    },
+    "followup_rate": 0.9545454545454546,
+    "keep": 2,
+    "ndcg@10": {
+      "hi": 0.9221525164244904,
+      "lo": 0.914908514001678,
+      "mean": 0.9184941077763069,
+      "n": 7018
+    },
+    "plan_k": 5,
+    "recall@10": {
+      "hi": 0.9539042462239954,
+      "lo": 0.9466372185807922,
+      "mean": 0.9502707324023938,
+      "n": 7018
+    },
+    "recall@10/bridge": {
+      "hi": 0.9424857549857549,
+      "lo": 0.9336716524216524,
+      "mean": 0.938034188034188,
+      "n": 5616
+    },
+    "recall@10/comparison": {
+      "hi": 1.0,
+      "lo": 0.9982168330955777,
+      "mean": 0.9992867332382311,
+      "n": 1402
+    },
+    "recall@5": {
+      "hi": 0.9332430891992021,
+      "lo": 0.9246223995440296,
+      "mean": 0.9288971216870904,
+      "n": 7018
+    },
+    "take": 1
+  },
+  "grid": [
+    {
+      "all_recall@10": {
+        "hi": 0.9099458535195213,
+        "lo": 0.895839270447421,
+        "mean": 0.9029638073525221,
+        "n": 7018
+      },
+      "followup_rate": 0.9545454545454546,
+      "keep": 2,
+      "ndcg@10": {
+        "hi": 0.9221525164244904,
+        "lo": 0.914908514001678,
+        "mean": 0.9184941077763069,
+        "n": 7018
+      },
+      "plan_k": 5,
+      "recall@10": {
+        "hi": 0.9539042462239954,
+        "lo": 0.9466372185807922,
+        "mean": 0.9502707324023938,
+        "n": 7018
+      },
+      "recall@10/bridge": {
+        "hi": 0.9424857549857549,
+        "lo": 0.9336716524216524,
+        "mean": 0.938034188034188,
+        "n": 5616
+      },
+      "recall@10/comparison": {
+        "hi": 1.0,
+        "lo": 0.9982168330955777,
+        "mean": 0.9992867332382311,
+        "n": 1402
+      },
+      "recall@5": {
+        "hi": 0.9332430891992021,
+        "lo": 0.9246223995440296,
+        "mean": 0.9288971216870904,
+        "n": 7018
+      },
+      "take": 1
+    }
+  ],
+  "meta": {
+    "git_sha": "01161ad9795f",
+    "hop1_from_cache": true,
+    "hop2_depth": 30,
+    "host": "explorer-d4052",
+    "llm": "Qwen/Qwen3-8B",
+    "python": "3.12.3",
+    "selected": {
+      "all_recall@10": 0.855,
+      "config": {
+        "alpha": 0.7,
+        "dense_index": "hnsw",
+        "family": "weighted_rerank",
+        "fusion": "weighted",
+        "rerank_blend": 0.0,
+        "rerank_depth": 100
+      },
+      "embedder_slug": "bge-large-en-v1.5",
+      "ndcg@10": 0.8916737535115807,
+      "recall@10": 0.925,
+      "reranker": "BAAI/bge-reranker-v2-m3"
+    },
+    "started_unix": 1795292542.372308,
+    "suite": "data/hotpot100k/full.jsonl"
+  },
+  "planner": [
+    {
+      "examples": [
+        [
+          "Sam Mendes and Ruby Yang share what profession?",
+          "Ruby Yang"
+        ],
+        [
+          "What program responsible for the Health Insurance Portability and Accountability Act works with AHCCS?",
+          "Centers for Medicare and Medicaid Services"
+        ],
+        [
+          "The 1997–98 UCLA Bruins men's basketball team lost to what team in the sweet sixteen match?",
+          "Kentucky Wildcats"
+        ],
+        [
+          "What do a Flaming beverage and a Gin and tonic have in common?",
+          "Tonic water"
+        ],
+        [
+          "Were both Roger Donaldson and André Cayatte french filmmakers?",
+          "Roger Donaldson"
+        ],
+        [
+          "What institution does 2017 Texas Tech Red Raiders baseball team and Dan Law Field at Rip Griffin Park have in common?",
+          "Texas Tech University"
+        ],
+        [
+          "What CBS-affiliated station serves Pontotoc County, Oklahoma?",
+          "KXII"
+        ],
+        [
+          "In 1632, where was one of the most highly acclaimed English architects born?",
+          "Christopher Wren"
+        ],
+        [
+          "In what year was the singer who popularized \"I'll Keep the Lovelight Burning\" born?",
+          "I'll Keep the Lovelight Burning"
+        ],
+        [
+          "What year was the film \"Mom\" released, starring the voice of Shashaa Tirupati?",
+          "Mom (film)"
+        ],
+        [
+          "Where did Otto von Bismarck and Ludwig Friedrich Leopold von Gerlach originate?",
+          "Prussia"
+        ],
+        [
+          "Where was the artist behind \"Shit\" born and raised?",
+          null
+        ]
+      ],
+      "followup_rate": 0.9545454545454546,
+      "plan_k": 5,
+      "planner_ms_mean": 2215.5797600546566
+    }
+  ]
+}

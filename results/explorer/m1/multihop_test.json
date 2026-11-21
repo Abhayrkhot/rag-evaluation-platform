@@ -1,0 +1,208 @@
+{
+  "baseline_hop1": {
+    "all_recall@10": {
+      "hi": 0.8575,
+      "lo": 0.7825,
+      "mean": 0.82,
+      "n": 400
+    },
+    "ndcg@10": {
+      "hi": 0.9088498596929121,
+      "lo": 0.8730200838283181,
+      "mean": 0.8912477781411903,
+      "n": 400
+    },
+    "recall@10": {
+      "hi": 0.9275,
+      "lo": 0.89,
+      "mean": 0.90875,
+      "n": 400
+    },
+    "recall@10/bridge": {
+      "hi": 0.909375,
+      "lo": 0.8609375,
+      "mean": 0.8859375,
+      "n": 320
+    },
+    "recall@10/comparison": {
+      "hi": 1.0,
+      "lo": 1.0,
+      "mean": 1.0,
+      "n": 80
+    },
+    "recall@5": {
+      "hi": 0.90875,
+      "lo": 0.86625,
+      "mean": 0.8875,
+      "n": 400
+    }
+  },
+  "best": {
+    "all_recall@10": {
+      "hi": 0.9125,
+      "lo": 0.8475,
+      "mean": 0.88,
+      "n": 400
+    },
+    "followup_rate": 0.924,
+    "keep": 2,
+    "ndcg@10": {
+      "hi": 0.9259911879442041,
+      "lo": 0.8933909522949118,
+      "mean": 0.9100259075547967,
+      "n": 400
+    },
+    "plan_k": 5,
+    "recall@10": {
+      "hi": 0.955,
+      "lo": 0.9225,
+      "mean": 0.93875,
+      "n": 400
+    },
+    "recall@10/bridge": {
+      "hi": 0.9421875,
+      "lo": 0.903125,
+      "mean": 0.9234375,
+      "n": 320
+    },
+    "recall@10/comparison": {
+      "hi": 1.0,
+      "lo": 1.0,
+      "mean": 1.0,
+      "n": 80
+    },
+    "recall@5": {
+      "hi": 0.9375,
+      "lo": 0.9,
+      "mean": 0.91875,
+      "n": 400
+    },
+    "take": 1
+  },
+  "grid": [
+    {
+      "all_recall@10": {
+        "hi": 0.9125,
+        "lo": 0.8475,
+        "mean": 0.88,
+        "n": 400
+      },
+      "followup_rate": 0.924,
+      "keep": 2,
+      "ndcg@10": {
+        "hi": 0.9259911879442041,
+        "lo": 0.8933909522949118,
+        "mean": 0.9100259075547967,
+        "n": 400
+      },
+      "plan_k": 5,
+      "recall@10": {
+        "hi": 0.955,
+        "lo": 0.9225,
+        "mean": 0.93875,
+        "n": 400
+      },
+      "recall@10/bridge": {
+        "hi": 0.9421875,
+        "lo": 0.903125,
+        "mean": 0.9234375,
+        "n": 320
+      },
+      "recall@10/comparison": {
+        "hi": 1.0,
+        "lo": 1.0,
+        "mean": 1.0,
+        "n": 80
+      },
+      "recall@5": {
+        "hi": 0.9375,
+        "lo": 0.9,
+        "mean": 0.91875,
+        "n": 400
+      },
+      "take": 1
+    }
+  ],
+  "meta": {
+    "git_sha": "01161ad9795f",
+    "hop1_from_cache": true,
+    "hop2_depth": 30,
+    "host": "explorer-d4052",
+    "llm": "Qwen/Qwen3-8B",
+    "python": "3.12.3",
+    "selected": {
+      "all_recall@10": 0.855,
+      "config": {
+        "alpha": 0.7,
+        "dense_index": "hnsw",
+        "family": "weighted_rerank",
+        "fusion": "weighted",
+        "rerank_blend": 0.0,
+        "rerank_depth": 100
+      },
+      "embedder_slug": "bge-large-en-v1.5",
+      "ndcg@10": 0.8916737535115807,
+      "recall@10": 0.925,
+      "reranker": "BAAI/bge-reranker-v2-m3"
+    },
+    "started_unix": 1795292259.0846846,
+    "suite": "data/hotpot100k/test.jsonl"
+  },
+  "planner": [
+    {
+      "examples": [
+        [
+          "What is the birthplace of the musician responsible for creating The Motion Makes Me Last?",
+          "Eluvium"
+        ],
+        [
+          "Are Waste Land and Shikashika both types of drinks?",
+          "Waste Land (film)"
+        ],
+        [
+          "Tysons Galleria is located in what county?",
+          "Fairfax County"
+        ],
+        [
+          "What city hosts an annual convention devoted to a line of toys manufactured by a company based in Denmark?",
+          "BrickCon"
+        ],
+        [
+          "When was the American singer, songwriter, actress and LGBT rights activist born who won Grammy and Emmy award?",
+          "Cyndi Lauper"
+        ],
+        [
+          "What career titles do Ed Wood and Fernand Rivers share?",
+          "Ed Wood (film)"
+        ],
+        [
+          "Bill McCollum took a leadership role in the Senate trial that began on which date?",
+          null
+        ],
+        [
+          "Who is older, Simon Neil or Michael McKean?",
+          "Michael McKean"
+        ],
+        [
+          "Steven Rattazzi provides the voice for the character of Doctor Byron Orpheus on an animated series created by who?",
+          "The Venture Bros."
+        ],
+        [
+          "The 1994 \"The Shadow\" co-stars Lone, Penelope Ann Miller, Peter Boyle, Jonathan Winters, Tim Curry and an actor that has received how many Emmy Award nominations?",
+          "Ian McKellen"
+        ],
+        [
+          "Were Sound Team and Dead by Sunrise both formed before 2010?",
+          "Dead by Sunrise"
+        ],
+        [
+          "Deckers Creek begins west of an unincorporated area in what West Virginia county?",
+          "Preston County"
+        ]
+      ],
+      "followup_rate": 0.924,
+      "plan_k": 5,
+      "planner_ms_mean": 2263.2320673950016
+    }
+  ]
+}
