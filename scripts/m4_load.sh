@@ -22,24 +22,33 @@ echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER agent=$AGENT" > "$R/l
 
 QARGS=(); [ "$PRECISION" = fp8 ] && QARGS=(--quantization fp8)
 start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization 0.9 --seed 0 "${QARGS[@]}"
-start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.4 --seed 0
+start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.35 --seed 0
+
+# encoder servers: one process per model on GPU1, shared by every API restart
+ENC_PIDS=()
+ENC_PIDS+=($(start_bg enc-embed 1 http://127.0.0.1:8101/health python3 -m rageval.cli encoders serve --kind embed --model "$EMB" --port 8101 --max-wait-ms 2))
+ENC_PIDS+=($(start_bg enc-rerank 1 http://127.0.0.1:8102/health python3 -m rageval.cli encoders serve --kind rerank --model "$RERANKER" --port 8102 --max-wait-ms 4 --batch-size 256))
+ENC_PIDS+=($(start_bg enc-nli 1 http://127.0.0.1:8103/health python3 -m rageval.cli encoders serve --kind nli --model MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli --port 8103 --max-wait-ms 4))
+trap 'for p in "${ENC_PIDS[@]}"; do stop_bg "$p"; done; stop_vllms' EXIT
+URLS=(--set models.embedder_url=http://127.0.0.1:8101 --set models.reranker_url=http://127.0.0.1:8102 --set models.verifier_url=http://127.0.0.1:8103)
+API_WORKERS=${API_WORKERS:-4}
 
 API_PID=
 start_api() {
   local tag=$1; shift
   mkdir -p "$R/$tag"
-  CUDA_VISIBLE_DEVICES=1 in_image python3 -m rageval.cli serve --config "$R/serve.yaml" --port 8080 \
-    --set "telemetry.trace_log=$R/$tag/trace.jsonl" --set "telemetry.span_log=$R/$tag/spans.jsonl" "$@" \
-    > "$R/$tag/api.log" 2>&1 &
-  API_PID=$!
-  wait_http http://127.0.0.1:8080/health 900
+  API_PID=$(start_bg "api-$tag" "" http://127.0.0.1:8080/health python3 -m rageval.cli serve --config "$R/serve.yaml" --port 8080 \
+    --workers "$API_WORKERS" "${URLS[@]}" --set "telemetry.trace_log=$R/$tag/trace.jsonl" --set "telemetry.span_log=$R/$tag/spans.jsonl" "$@")
   # warm the encoders and both LLM endpoints (not measured)
   cli loadtest run --url http://127.0.0.1:8080/v1/answer "${POOL[@]}" --qps 5 --duration 20 --warmup 20 --seed 999 \
     --out "$R/$tag/warm.jsonl" > /dev/null
 }
 stop_api() {
   curl -sf http://127.0.0.1:8080/v1/stats > "$R/$1/stats.json" || true
-  kill "$API_PID" 2>/dev/null || true; wait "$API_PID" 2>/dev/null || true
+  for k in 8101 8102 8103; do curl -sf "http://127.0.0.1:$k/stats"; echo; done > "$R/$1/encoders.json" || true
+  stop_bg "$API_PID"
+  # the port must be free before the next run starts its API
+  for _ in $(seq 30); do curl -sf -o /dev/null http://127.0.0.1:8080/health || break; sleep 1; done
 }
 load() {  # tag qps duration seed
   cli loadtest run --url http://127.0.0.1:8080/v1/answer "${POOL[@]}" --qps "$2" --duration "$3" --warmup 30 \
@@ -52,7 +61,7 @@ for q in $SWEEP; do
   load "sweep_q$q" "$q" "${SWEEP_S:-120}" "$((100 + q))"
   stop_api "sweep_q$q"
 done
-[ "$PHASE" = probe ] && { stop_vllms; exit 0; }
+[ "$PHASE" = probe ] && exit 0
 
 for seed in 1 2 3; do
   order=(static adaptive); [ $((seed % 2)) -eq 0 ] && order=(adaptive static)
@@ -67,7 +76,6 @@ for seed in 1 2 3; do
     stop_api "$tag"
   done
 done
-stop_vllms
 b=(); t=(); for s in 1 2 3; do b+=(--base "$R/q50_static_s$s"); t+=(--treat "$R/q50_adaptive_s$s"); done
 sw=(); for q in $SWEEP; do sw+=(--sweep "$R/sweep_q$q"); done
 cli loadtest compare "${b[@]}" "${t[@]}" "${sw[@]}" --out "$R/compare_q50.json"

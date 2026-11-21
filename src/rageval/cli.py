@@ -857,12 +857,33 @@ def serve(
     set_: Annotated[
         list[str] | None, typer.Option("--set", help="dotted overrides, e.g. router=static")
     ] = None,
+    workers: int = 1,
 ) -> None:
-    """Run the LangGraph agent behind FastAPI (one process; GPU encoders are micro-batched)."""
+    """Run the LangGraph agent behind FastAPI. With --workers > 1 every worker process runs its own
+    agent; the encoders should then be remote (models.*_url) so the GPU models load once."""
     import uvicorn
 
     from rageval.serve.app import create_app, load_config
 
+    if workers > 1:
+        # each worker process builds its own agent (indexes, router state, telemetry files)
+        import os
+
+        os.environ["RAG_SERVE_CONFIG"] = str(config)
+        os.environ["RAG_SERVE_SET"] = json.dumps(set_ or [])
+        os.environ["RAG_SERVE_WORKERS"] = str(workers)
+        load_config(config, set_)  # validate before forking
+        uvicorn.run(
+            "rageval.serve.app:app_from_env",
+            factory=True,
+            host=host,
+            port=port,
+            workers=workers,
+            log_level="warning",
+            access_log=False,
+            timeout_keep_alive=75,
+        )
+        return
     cfg = load_config(config, set_)
     uvicorn.run(
         create_app(cfg),
@@ -891,6 +912,32 @@ def serve_materialize(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(txt)
     _echo({"out": str(out)})
+
+
+enc_app = typer.Typer(no_args_is_help=True, help="Stand-alone encoder servers")
+app.add_typer(enc_app, name="encoders")
+
+
+@enc_app.command("serve")
+def encoders_serve(
+    kind: Annotated[str, typer.Option(help="embed | rerank | nli")],
+    model: Annotated[str, typer.Option()],
+    port: Annotated[int, typer.Option()],
+    host: str = "127.0.0.1",
+    device: str | None = None,
+    max_items: int = 512,
+    max_wait_ms: float = 4.0,
+    batch_size: int = 128,
+) -> None:
+    """One encoder model per process, micro-batched across concurrent requests."""
+    import uvicorn
+
+    from rageval.serve.encoders import create_encoder_app
+
+    app_ = create_encoder_app(kind, model, device, max_items, max_wait_ms, batch_size)
+    uvicorn.run(
+        app_, host=host, port=port, log_level="warning", access_log=False, timeout_keep_alive=75
+    )
 
 
 lt_app = typer.Typer(no_args_is_help=True, help="Open-loop load tests")

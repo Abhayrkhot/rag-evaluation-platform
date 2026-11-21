@@ -31,6 +31,7 @@ class ModelsConfig(BaseModel):
     reranker: str | None = "BAAI/bge-reranker-v2-m3"
     reranker_url: str | None = None
     verifier: str = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli"
+    verifier_url: str | None = None
     generator: str = "Qwen/Qwen3-8B"
     generator_url: str = "http://127.0.0.1:8000"
     fallback: str | None = "Qwen/Qwen3-1.7B"

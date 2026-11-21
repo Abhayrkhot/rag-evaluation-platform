@@ -109,27 +109,39 @@ def build_agent(cfg: ServeConfig) -> RAGAgent:
     idx = Path(m.index_dir)
     bm25 = BM25Index.load(idx / "bm25")
     dense = DenseIndex.load(idx / "dense" / slug(m.embedder) / m.dense_index)
-    emb = HFEmbedder(m.embedder, device=cfg.device, batch_size=cfg.embed_batch.max_items)
-    embed_b = MicroBatcher(
-        emb.embed, "embed", cfg.embed_batch.max_items, cfg.embed_batch.max_wait_ms
-    )
-    rerank_b = None
-    if m.reranker and cfg.agent.retrieval.rerank:
-        ce = HFCrossEncoder(m.reranker, device=cfg.device, batch_size=128)
-        rerank_b = MicroBatcher(
-            ce.score, "rerank", cfg.rerank_batch.max_items, cfg.rerank_batch.max_wait_ms
-        )
-    verify_b = None
-    if cfg.agent.verify != "none":
-        from rageval.judges.nli import ClassNLI
+    from rageval.serve.encoders import RemoteEmbedClient, RemoteNLIClient, RemoteRerankClient
 
-        nli = ClassNLI(m.verifier, device=cfg.device, batch_size=128)
-        verify_b = MicroBatcher(
-            lambda pairs: nli.prob([p for p, _ in pairs], [h for _, h in pairs]),
-            "verify",
-            cfg.verify_batch.max_items,
-            cfg.verify_batch.max_wait_ms,
+    embed_b: Any
+    if m.embedder_url:
+        embed_b = RemoteEmbedClient(m.embedder_url)
+    else:
+        emb = HFEmbedder(m.embedder, device=cfg.device, batch_size=cfg.embed_batch.max_items)
+        embed_b = MicroBatcher(
+            emb.embed, "embed", cfg.embed_batch.max_items, cfg.embed_batch.max_wait_ms
         )
+    rerank_b: Any = None
+    if m.reranker and cfg.agent.retrieval.rerank:
+        if m.reranker_url:
+            rerank_b = RemoteRerankClient(m.reranker_url)
+        else:
+            ce = HFCrossEncoder(m.reranker, device=cfg.device, batch_size=128)
+            rerank_b = MicroBatcher(
+                ce.score, "rerank", cfg.rerank_batch.max_items, cfg.rerank_batch.max_wait_ms
+            )
+    verify_b: Any = None
+    if cfg.agent.verify != "none":
+        if m.verifier_url:
+            verify_b = RemoteNLIClient(m.verifier_url)
+        else:
+            from rageval.judges.nli import ClassNLI
+
+            nli = ClassNLI(m.verifier, device=cfg.device, batch_size=128)
+            verify_b = MicroBatcher(
+                lambda pairs: nli.prob([p for p, _ in pairs], [h for _, h in pairs]),
+                "verify",
+                cfg.verify_batch.max_items,
+                cfg.verify_batch.max_wait_ms,
+            )
     gen_params = dict(cfg.agent.gen_params)
     if "qwen3" in m.generator.lower() and "chat_template_kwargs" not in gen_params:
         gen_params.update(QWEN3_NO_THINK)
@@ -260,5 +272,15 @@ def create_app(cfg: ServeConfig, agent_factory: Any = None) -> FastAPI:
 
 
 def app_from_env() -> FastAPI:
-    """uvicorn factory: RAG_SERVE_CONFIG=path uvicorn --factory rageval.serve.app:app_from_env"""
-    return create_app(load_config(os.environ["RAG_SERVE_CONFIG"]))
+    """uvicorn factory (one per worker process):
+    RAG_SERVE_CONFIG=path [RAG_SERVE_SET='["k=v", ...]'] uvicorn --factory rageval.serve.app:app_from_env"""
+    import json
+
+    overrides = json.loads(os.environ.get("RAG_SERVE_SET", "[]"))
+    cfg = load_config(os.environ["RAG_SERVE_CONFIG"], overrides)
+    wid = os.getpid()
+    for key in ("trace_log", "span_log"):  # one file per worker process
+        path = getattr(cfg.telemetry, key)
+        if path and int(os.environ.get("RAG_SERVE_WORKERS", "1")) > 1:
+            setattr(cfg.telemetry, key, path.replace(".jsonl", f".{wid}.jsonl"))
+    return create_app(cfg)

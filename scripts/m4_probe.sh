@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Capacity probe: static-routing sweeps with a BF16 and an FP8 primary (sizing for M4).
+# Capacity probe: static-routing sweep (sizing for M4). PRECISIONS="bf16 fp8" to compare.
 set -euo pipefail
-PHASE=probe PRECISION=bf16 SWEEP_S=90 bash scripts/m4_load.sh
-PHASE=probe PRECISION=fp8 SWEEP_S=90 bash scripts/m4_load.sh
+for p in ${PRECISIONS:-bf16}; do
+  PHASE=probe PRECISION=$p SWEEP_S=${SWEEP_S:-90} bash scripts/m4_load.sh
+done

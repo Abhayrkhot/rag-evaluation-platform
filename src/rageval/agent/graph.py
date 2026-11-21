@@ -43,7 +43,6 @@ from rageval.retrieval.fusion import fuse
 from rageval.retrieval.hybrid import RetrievalConfig
 from rageval.retrieval.multihop import merge_hops, parse_followup, plan_messages
 from rageval.serve import telemetry as tm
-from rageval.serve.batcher import MicroBatcher
 
 
 class AgentConfig(BaseModel):
@@ -93,9 +92,9 @@ class RAGAgent:
         bm25: BM25Index,
         dense: DenseIndex,
         embed_model: str,
-        embed: MicroBatcher,
-        rerank: MicroBatcher | None,
-        verifier: MicroBatcher | None,
+        embed: Any,
+        rerank: Any | None,
+        verifier: Any | None,
         router: FallbackRouter,
         config: AgentConfig,
         cpu_workers: int = 8,
