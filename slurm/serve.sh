@@ -7,11 +7,15 @@ start_vllm() {
   local log="$RAG_ROOT/logs/vllm-${SLURM_JOB_ID:-local}-$(echo "${model##*/}" | tr '[:upper:]' '[:lower:]')-$port.log"
   CUDA_VISIBLE_DEVICES=$gpus in_image vllm serve "$model" --host 127.0.0.1 --port "$port" \
     --disable-log-requests --uvicorn-log-level warning "$@" > "$log" 2>&1 &
-  VLLM_PIDS+=($!)
-  echo "vllm $model on :$port (gpu $gpus) pid $! log $log"
-  if ! wait_http "http://127.0.0.1:$port/health" 1800; then
-    tail -50 "$log" >&2; return 1
-  fi
+  local pid=$!
+  VLLM_PIDS+=($pid)
+  echo "vllm $model on :$port (gpu $gpus) pid $pid log $log"
+  local deadline=$(( $(date +%s) + 1800 ))
+  until curl -sf -o /dev/null "http://127.0.0.1:$port/health"; do
+    if ! kill -0 "$pid" 2>/dev/null; then echo "vllm $model exited during startup" >&2; tail -40 "$log" >&2; return 1; fi
+    [ "$(date +%s)" -gt "$deadline" ] && { echo "vllm $model startup timeout" >&2; tail -40 "$log" >&2; return 1; }
+    sleep 5
+  done
 }
 stop_vllms() {
   for p in "${VLLM_PIDS[@]}"; do kill "$p" 2>/dev/null || true; done

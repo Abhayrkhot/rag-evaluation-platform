@@ -13,7 +13,7 @@ cd "$SLURM_SUBMIT_DIR"
 export RAG_ONLINE=1
 source slurm/env.sh
 # Reuse model snapshots already downloaded by other projects instead of fetching them again.
-for d in /scratch/$USER/icp/hf/hub/models--openai--gpt-oss-120b /scratch/$USER/infersched/hf-home/hub/models--Qwen--Qwen3-8B; do
+for d in /scratch/$USER/icp/hf/hub/models--openai--gpt-oss-120b; do
   [ -e "$HF_HOME/hub/$(basename "$d")" ] || ln -s "$d" "$HF_HOME/hub/$(basename "$d")"
 done
 apptainer exec --bind "/scratch/$USER" "$RAG_SIF" bash -c '

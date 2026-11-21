@@ -106,11 +106,268 @@ def retrieval_block() -> str | None:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- two-hop retrieval
+
+
+def multihop_block() -> str | None:
+    t = load(RES / "explorer/m1/multihop_test.json")
+    f = load(RES / "explorer/m1/multihop_full.json")
+    d = load(RES / "explorer/m1/multihop_dev.json")
+    if not (t and f and d):
+        return None
+    b = d["best"]
+    rows = []
+    for name, x in (("test", t), ("full", f)):
+        one, two = x["baseline_hop1"], x["best"]
+        rows.append(
+            [
+                name,
+                str(one["recall@10"].get("n", "")),
+                pct_ci(one["recall@10"]),
+                pct_ci(two["recall@10"]),
+                f"{pct(one['recall@10/bridge'])} -> {pct(two['recall@10/bridge'])}",
+                f"{pct(one['all_recall@10'])} -> {pct(two['all_recall@10'])}",
+                f"{100 * two['followup_rate']:.0f}%",
+            ]
+        )
+    return "\n".join(
+        [
+            "Second hop for bridge questions: the generator (Qwen3-8B) reads the top "
+            f"{b['plan_k']} first-hop passages and names the missing article or says NONE; a second "
+            f"hybrid + rerank pass runs on that query and its top {b['take']} hits are spliced in after "
+            f"the first {b['keep']} first-hop hits (splice and planner context chosen on dev).",
+            "",
+            table(
+                [
+                    "Suite",
+                    "Questions",
+                    "Single hop Recall@10",
+                    "Two hop Recall@10",
+                    "Bridge Recall@10",
+                    "Both hops@10",
+                    "Follow-up issued",
+                ],
+                rows,
+            ),
+        ]
+    )
+
+
+# ---------------------------------------------------------------- grounding / prompts
+
+
+STAGES = [
+    ("s0_baseline", 'S0 naive RAG: hybrid top-10, no reranking, plain "cite [n]" prompt'),
+    ("s1a_rerank", "S1a + cross-encoder reranking"),
+    ("s1b_2hop", "S1b + two-hop retrieval"),
+    ("zero_shot", "S2 + citation and grounding rules (zero-shot)"),
+    ("__best__", "S3 + best prompt strategy (picked on dev)"),
+    ("s4_verified", "S4 + NLI citation verification and pruning"),
+]
+
+
+def _m(s: dict[str, Any], k: str) -> str:
+    return pct_ci(s.get(k)) if s.get(k) else "n/a"
+
+
+def grounding_block() -> str | None:
+    rep = load(RES / "explorer/m2/test_report.json")
+    choice = load(RES / "explorer/m2/test_choices.json")
+    if not (rep and choice):
+        return None
+    S = rep["summary"]
+    rows = []
+    for key, label in STAGES:
+        name = choice["best_prompt"] if key == "__best__" else key
+        if name not in S:
+            continue
+        x = S[name]
+        rows.append(
+            [
+                label + (f" (`{name}`)" if key == "__best__" else ""),
+                _m(x, "citation_precision"),
+                _m(x, "citation_recall"),
+                _m(x, "correct"),
+                pct(x.get("abstain_unanswerable")),
+                pct(x.get("context_recall")),
+            ]
+        )
+    return "\n".join(
+        [
+            f"Test suite, {S['s0_baseline']['n']} questions ({S['s0_baseline']['n_answerable']} answerable, "
+            f"{S['s0_baseline']['n_unanswerable']} unanswerable). Citation precision and recall are ALCE's, judged by "
+            "TRUE (T5-11B NLI) over answered questions; correctness is gpt-oss-120b against the HotpotQA answer on "
+            "answerable questions; abstention is on unanswerable questions. Generator: Qwen3-8B, greedy.",
+            "",
+            table(
+                [
+                    "Stage",
+                    "Citation precision",
+                    "Citation recall",
+                    "Correct (answerable)",
+                    "Abstains (unanswerable)",
+                    "Gold docs in context",
+                ],
+                rows,
+            ),
+        ]
+    )
+
+
+def prompts_block() -> str | None:
+    rep = load(RES / "explorer/m2/test_report.json")
+    choice = load(RES / "explorer/m2/test_choices.json")
+    if not (rep and choice):
+        return None
+    S = rep["summary"]
+    rows = []
+    for name in ("zero_shot", "few_shot", "cot"):
+        x = S[name]
+        rows.append(
+            [
+                name,
+                str(x.get("unsupported_claims_total")),
+                str(x.get("claims_total")),
+                pct_ci(x.get("unsupported_rate")),
+                pct(x.get("answers_with_unsupported")),
+                _m(x, "citation_precision"),
+                _m(x, "correct"),
+                pct(x.get("abstain_unanswerable")),
+            ]
+        )
+    tests = []
+    for r in rep["paired"]:
+        if (
+            r["a"] == "zero_shot"
+            and r["b"] in ("few_shot", "cot")
+            and r["metric"]
+            in ("unsupported_count", "has_unsupported", "correct", "citation_precision")
+        ):
+            p = r["p_mcnemar"] if r["p_mcnemar"] is not None else r["p_wilcoxon"]
+            tests.append(
+                [
+                    f"{r['a']} vs {r['b']}",
+                    r["metric"],
+                    str(r["n"]),
+                    f"{r['mean_a']:.3f} -> {r['mean_b']:.3f}",
+                    f"{r['delta']:+.3f} [{r['delta_lo']:+.3f}, {r['delta_hi']:+.3f}]",
+                    f"{p:.2g}",
+                    f"{r['p_holm']:.2g}",
+                ]
+            )
+    z, b = S["zero_shot"], S[choice["best_prompt"]]
+    cut = 1 - b["unsupported_claims_total"] / max(z["unsupported_claims_total"], 1)
+    return "\n".join(
+        [
+            "Same 500 questions and identical retrieved contexts for every strategy; unsupported claims are "
+            "statements gpt-oss-120b judges not fully supported by the documents the generator saw.",
+            "",
+            table(
+                [
+                    "Strategy",
+                    "Unsupported claims",
+                    "Claims",
+                    "Unsupported rate [95% CI]",
+                    "Answers with one+",
+                    "Citation precision",
+                    "Correct",
+                    "Abstains (unanswerable)",
+                ],
+                rows,
+            ),
+            "",
+            f"Unsupported claims, `zero_shot` -> `{choice['best_prompt']}`: {z['unsupported_claims_total']} -> "
+            f"{b['unsupported_claims_total']} ({100 * cut:.0f}% fewer).",
+            "",
+            "Paired tests (bootstrap CI on the per-question difference; McNemar for binary metrics, Wilcoxon otherwise; Holm across the family):",
+            "",
+            table(["Comparison", "Metric", "n", "Mean", "Delta [95% CI]", "p", "p (Holm)"], tests),
+        ]
+    )
+
+
+# ---------------------------------------------------------------- serving
+
+
+def serving_block() -> str | None:
+    cands = (
+        sorted((RES / "explorer/m4").glob("main_*/compare_q50.json"))
+        if (RES / "explorer/m4").exists()
+        else []
+    )
+    if not cands:
+        return None
+    c = load(cands[-1])
+    run = cands[-1].parent.name
+    rows = []
+    for q in ("p50", "p90", "p95", "p99"):
+        x = c[q]
+        rows.append(
+            [
+                q,
+                f"{x['base_ms'] / 1e3:.2f} s",
+                f"{x['treat_ms'] / 1e3:.2f} s",
+                f"{100 * x['reduction']:.0f}% [{100 * x['reduction_lo']:.0f}, {100 * x['reduction_hi']:.0f}]",
+                ", ".join(f"{v / 1e3:.2f}" for v in x["base_per_seed_ms"])
+                + " / "
+                + ", ".join(f"{v / 1e3:.2f}" for v in x["treat_per_seed_ms"]),
+            ]
+        )
+    tr = c["treat"]
+    share = ", ".join(f"{k} {100 * v:.1f}%" for k, v in sorted(tr["route_share"].items()))
+    deg = (
+        ", ".join(f"{k} {100 * v:.1f}%" for k, v in sorted(tr["degraded_share"].items())) or "none"
+    )
+    lines = [
+        f"Open-loop Poisson arrivals at 50 QPS, {c['seeds']} seeds per mode, alternating order, 30 s warm-up excluded (`{run}`). "
+        "Static: every request goes to the primary, full pipeline. Fallback routing: overflow, deadline, hedging, "
+        "circuit breaker and retry in the router, plus deadline-aware skipping of reranking/verification in the graph.",
+        "",
+        table(
+            [
+                "Latency",
+                "Static",
+                "Fallback routing",
+                "Reduction [95% CI, block bootstrap]",
+                "Per seed (static / routed), s",
+            ],
+            rows,
+        ),
+        "",
+        f"Requests per mode: {c['base']['requests']} static, {tr['requests']} routed; errors {100 * c['base']['error_rate']:.2f}% / "
+        f"{100 * tr['error_rate']:.2f}%. Routed traffic: {share}. Degraded stages: {deg}.",
+    ]
+    if c.get("sweep"):
+        lines += [
+            "",
+            "Capacity sweep with static routing (sizing):",
+            "",
+            table(
+                ["Offered QPS", "p50", "p95", "p99", "Errors"],
+                [
+                    [
+                        f"{x['offered_qps']:.1f}",
+                        f"{x['p50_ms'] / 1e3:.2f} s",
+                        f"{x['p95_ms'] / 1e3:.2f} s",
+                        f"{x['p99_ms'] / 1e3:.2f} s",
+                        f"{100 * x['error_rate']:.1f}%",
+                    ]
+                    for x in c["sweep"]
+                ],
+            ),
+        ]
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------- render
 
 
 BLOCKS = {
     "retrieval": retrieval_block,
+    "multihop": multihop_block,
+    "grounding": grounding_block,
+    "prompts": prompts_block,
+    "serving": serving_block,
 }
 
 

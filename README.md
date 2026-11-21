@@ -35,6 +35,12 @@ Test: 400 answerable questions. Full: 7018 answerable questions. HNSW vs exact s
 Index build: Qwen3-Embedding-0.6B 655 docs/s; bge-base-en-v1.5 1928 docs/s; bge-large-en-v1.5 1540 docs/s; BM25 6 s.
 <!-- END:retrieval -->
 
+### Two-hop retrieval (LangGraph planner node)
+
+<!-- BEGIN:multihop -->
+_Pending: results not generated yet._
+<!-- END:multihop -->
+
 ## Grounding: citation precision, stage by stage
 
 <!-- BEGIN:grounding -->
