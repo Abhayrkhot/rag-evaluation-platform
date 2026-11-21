@@ -16,6 +16,7 @@ not graded by the same model that repaired it.
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -62,6 +63,87 @@ class _Pairs:
         return [self.cache[r] for r in reqs]
 
 
+_STOP = {
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "be",
+    "been",
+    "has",
+    "had",
+    "have",
+    "that",
+    "this",
+    "which",
+    "who",
+    "both",
+    "also",
+    "not",
+    "than",
+    "then",
+    "there",
+    "their",
+    "its",
+    "his",
+    "her",
+    "it",
+    "he",
+    "she",
+    "they",
+    "yes",
+    "no",
+    "therefore",
+    "however",
+    "while",
+    "after",
+    "before",
+    "into",
+    "about",
+}
+_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9'\-]*")
+
+
+def salient_tokens(text: str) -> set[str]:
+    """Entity-like tokens (capitalised words of 3+ letters that are not stopwords, and numbers),
+    lower-cased; falls back to long content words when a text has none."""
+    toks = _TOKEN.findall(text)
+    ents = {
+        t.lower()
+        for i, t in enumerate(toks)
+        if t.lower() not in _STOP and (t[0].isdigit() or (t[0].isupper() and len(t) >= 3))
+    }
+    if ents:
+        return ents
+    return {t.lower() for t in toks if len(t) >= 5 and t.lower() not in _STOP}
+
+
+def _overlaps(statement: str, doc: tuple[str, str]) -> bool:
+    """Lexical grounding gate for re-citation: the candidate document must share at least one
+    salient token with the statement. NLI models occasionally entail a statement from an unrelated
+    passage, and searching many candidates makes such false positives likely."""
+    st = salient_tokens(statement)
+    if not st:
+        return True
+    words = {t.lower() for t in _TOKEN.findall(f"{doc[0]} {doc[1]}")}
+    return bool(st & words)
+
+
 async def _minimize(
     cites: list[int], s: Statement, docs: Sequence[tuple[str, str]], P: _Pairs, tau: float
 ) -> list[int]:
@@ -104,8 +186,9 @@ async def _check(
     joint_ok = bool(cites0) and (await P.get([(_premise(docs, cites0), s.text)]))[0] >= tau
     if joint_ok:
         return await _minimize(cites0, s, docs, P, tau), record, "kept"
+    allowed = [i for i in range(n) if _overlaps(s.text, docs[i])]
     if 0 < len(cites0) < 3:
-        extra = [d for d in range(n) if d not in cites0]
+        extra = [d for d in allowed if d not in cites0]
         probs = await P.get([(_premise(docs, sorted([*cites0, d])), s.text) for d in extra])
         j = int(np.argmax(probs)) if probs else -1
         if j >= 0 and probs[j] >= tau:
@@ -114,11 +197,13 @@ async def _check(
                 record,
                 "completed",
             )
-    singles = await P.get([(_premise(docs, [i]), s.text) for i in range(n)])
+    if not allowed:
+        return None, record, "unsupported"
+    singles = await P.get([(_premise(docs, [i]), s.text) for i in allowed])
     best = int(np.argmax(singles)) if singles else -1
     if best >= 0 and singles[best] >= tau:
-        return [best], record, "recited"
-    top = list(np.argsort(singles)[::-1][: max(pair_candidates, 2)])
+        return [allowed[best]], record, "recited"
+    top = [allowed[i] for i in np.argsort(singles)[::-1][: max(pair_candidates, 2)]]
     pairs = [(int(a), int(b)) for i, a in enumerate(top) for b in top[i + 1 :]]
     probs = await P.get([(_premise(docs, sorted(p)), s.text) for p in pairs]) if pairs else []
     j = int(np.argmax(probs)) if probs else -1

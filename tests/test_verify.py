@@ -63,3 +63,45 @@ def test_prune_flagged_and_revise_keeps_first_pass():
     assert len(out.claims) == 2  # revise keeps; the caller decides
     pruned = prune_flagged(out, st)
     assert [s.text for s in pruned.claims] == ["Alpha."]
+
+
+def test_salient_gate_blocks_unrelated_recitation():
+    from rageval.generation.verify import salient_tokens
+
+    docs = [
+        ("The CW", "The CW is an American broadcast television network."),
+        ("Dragon TV", "Dragon TV is a Chinese channel."),
+    ]
+
+    def always(premises, hyps):
+        return np.ones(len(premises))
+
+    p = parse_answer("The series aired on Dragon TV [1].")
+    out, _ = verify_answer(p, docs, always)
+    assert out.statements[0].citations == [1] or out.statements[0].citations == [2]
+    # an NLI model that wrongly entails from document 1 cannot pull it in when only 2 overlaps
+    p2 = parse_answer("Li Yitong debuted on Dragon TV [9].")
+    out2, _ = verify_answer(p2, docs, always)
+    assert out2.statements[0].citations == [2]
+    assert "dragon" in salient_tokens("Li Yitong debuted on Dragon TV")
+
+
+def test_v_abbreviation_does_not_split():
+    from rageval.generation.citations import split_sentences
+
+    assert split_sentences("Roth v. United States came first [1].") == [
+        "Roth v. United States came first [1]."
+    ]
+
+
+def test_salient_gate_entities():
+    from rageval.generation.verify import _overlaps, salient_tokens
+
+    st = "The series aired on Dragon TV, where Li Yitong made her television debut."
+    assert salient_tokens(st) == {"dragon", "yitong"}
+    cw = (
+        "The CW",
+        "The CW Television Network is an American broadcast television network airing series.",
+    )
+    assert not _overlaps(st, cw)
+    assert _overlaps(st, ("Li Yitong (actress)", "Li Yitong is a Chinese actress."))

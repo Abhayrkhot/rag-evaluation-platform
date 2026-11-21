@@ -154,8 +154,12 @@ def create_encoder_app(
 
 
 class _Remote:
+    """base_url may list replicas separated by commas; requests are spread round-robin."""
+
     def __init__(self, base_url: str, timeout: float = 30.0, model: str | None = None) -> None:
-        self.base_url = base_url.rstrip("/")
+        self.urls = [u.strip().rstrip("/") for u in base_url.split(",") if u.strip()]
+        self.base_url = self.urls[0]
+        self._rr = 0
         self.model = model  # sent as "model" (required by vLLM's OpenAI-compatible endpoints)
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
@@ -172,7 +176,9 @@ class _Remote:
 
     async def _post(self, path: str, body: dict[str, Any]) -> Any:
         t0 = time.perf_counter()
-        r = await self.client().post(f"{self.base_url}{path}", json=body)
+        url = self.urls[self._rr % len(self.urls)]
+        self._rr += 1
+        r = await self.client().post(f"{url}{path}", json=body)
         r.raise_for_status()
         self.batches += 1
         self.busy_s += time.perf_counter() - t0

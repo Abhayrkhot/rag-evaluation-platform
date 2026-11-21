@@ -21,19 +21,26 @@ nvidia-smi --query-gpu=index,name,memory.total --format=csv > "$R/gpus.csv"
 echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER agent=$AGENT" > "$R/layout.txt"
 
 QARGS=(); [ "$PRECISION" = fp8 ] && QARGS=(--quantization fp8)
-start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization 0.9 --seed 0 "${QARGS[@]}"
+start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization 0.82 --seed 0 "${QARGS[@]}"
 start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.3 --seed 0
 
 # encoders on GPU1: embedder and reranker served by vLLM's pooling runner (CUDA graphs, unpadded
 # batches); the NLI verifier (DeBERTa, not supported by vLLM) in its own micro-batched process.
 start_vllm "$EMB" 8101 1 --runner pooling --max-model-len 512 --gpu-memory-utilization 0.06
 start_vllm "$RERANKER" 8102 1 --runner pooling --max-model-len 4096 --gpu-memory-utilization 0.06
+# NLI verifier replicas (DeBERTa-v3-large is compute-heavy): two on GPU1, one on GPU0 beside the primary
 ENC_PIDS=()
-ENC_PIDS+=($(start_bg enc-nli 1 http://127.0.0.1:8103/health python3 -m rageval.cli encoders serve --kind nli --model MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli --port 8103 --max-wait-ms "${NLI_WAIT_MS:-8}"))
+NLI_URLS=""
+for spec in 1:8103 1:8104 0:8105; do
+  g=${spec%%:*}; port=${spec##*:}
+  ENC_PIDS+=($(start_bg "enc-nli-$port" "$g" "http://127.0.0.1:$port/health" python3 -m rageval.cli encoders serve --kind nli \
+    --model MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli --port "$port" --max-wait-ms "${NLI_WAIT_MS:-6}"))
+  NLI_URLS="${NLI_URLS:+$NLI_URLS,}http://127.0.0.1:$port"
+done
 trap 'for p in "${ENC_PIDS[@]}"; do stop_bg "$p"; done; stop_vllms' EXIT
 CUDA_VISIBLE_DEVICES=1 cli bench parity --out "$R/parity.json" --embed-url http://127.0.0.1:8101 --embedder "$EMB" \
   --rerank-url http://127.0.0.1:8102 --reranker "$RERANKER" --candidates "artifacts/cands/dev__$EMB_SLUG.jsonl"
-URLS=(--set models.embedder_url=http://127.0.0.1:8101 --set models.reranker_url=http://127.0.0.1:8102 --set models.verifier_url=http://127.0.0.1:8103)
+URLS=(--set models.embedder_url=http://127.0.0.1:8101 --set models.reranker_url=http://127.0.0.1:8102 --set "models.verifier_url=$NLI_URLS")
 API_WORKERS=${API_WORKERS:-4}
 
 API_PID=
@@ -48,7 +55,7 @@ start_api() {
 }
 stop_api() {
   curl -sf http://127.0.0.1:8080/v1/stats > "$R/$1/stats.json" || true
-  for k in 8101 8102 8103; do curl -sf "http://127.0.0.1:$k/stats"; echo; done > "$R/$1/encoders.json" || true
+  for k in 8103 8104 8105; do curl -sf "http://127.0.0.1:$k/stats"; echo; done > "$R/$1/encoders.json" || true
   stop_bg "$API_PID"
   # the port must be free before the next run starts its API
   for _ in $(seq 30); do curl -sf -o /dev/null http://127.0.0.1:8080/health || break; sleep 1; done

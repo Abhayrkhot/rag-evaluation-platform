@@ -1,0 +1,3 @@
+{"kind":"embed","model":"BAAI/bge-large-en-v1.5","batches":3937,"items":4700,"busy_s":78.819}
+{"kind":"rerank","model":"Alibaba-NLP/gte-reranker-modernbert-base","batches":661,"items":235000,"busy_s":206.824}
+{"kind":"nli","model":"MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli","batches":3309,"items":21280,"busy_s":123.059}

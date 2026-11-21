@@ -26,3 +26,16 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   Iteration 2: rules v2 (one fact per sentence, cite every source, no pronouns), citation repair
   that first completes a citation with the missing second source and minimises the result, and a
   `revise` policy that sends flagged sentences back to the generator once and prunes what still fails.
+- **M2 dev iteration 2** (archived in `results/explorer/m2/dev_iter2`). Rules v2 alone lifted
+  TRUE citation precision from 52% to 73% (zero-shot, K=10); revise reached 83-85% at unchanged
+  correctness (about 0.84). Remaining errors included NLI false positives found by the repair
+  search (DeBERTa gave 0.98 entailment for "The series aired on Dragon TV, where Li Yitong made
+  her television debut" from The CW's paragraph) and a sentence split at "Roth v. United States".
+  Iteration 3: re-citation candidates must share an entity token with the statement, "v." added
+  to the abbreviations, revise threshold swept at K=10.
+- **M4 capacity probes.** In-process encoders saturated near 25 QPS (GIL and kernel-launch bound;
+  the old API process also survived restarts because `kill` hit the apptainer wrapper). Separate
+  encoder processes: the reranker saturated near 30 QPS. vLLM pooling servers for the embedder and
+  reranker (parity vs HF: embedding cosine >= 0.9999, rerank Spearman 0.998): reranking at 30 QPS
+  dropped from 10.6 s to 0.16 s p50, and the DeBERTa verifier became the bottleneck, so it now
+  runs as three replicas across both GPUs.

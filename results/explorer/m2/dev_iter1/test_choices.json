@@ -1,0 +1,106 @@
+{
+  "best_prompt": "cot",
+  "context_k": 10,
+  "dev_evidence": {
+    "cot_k5": {
+      "abstain_unanswerable": 0.82,
+      "citation_precision": 0.6595365418894831,
+      "correct": 0.805,
+      "unsupported_rate": 0.18385650224215247
+    },
+    "cot_k5_prune_t50": {
+      "abstain_unanswerable": 0.84,
+      "citation_precision": 0.7085889570552147,
+      "correct": 0.685,
+      "unsupported_rate": 0.1518324607329843
+    },
+    "few_k5": {
+      "abstain_unanswerable": 0.34,
+      "citation_precision": 0.6551724137931034,
+      "correct": 0.81,
+      "unsupported_rate": 0.268361581920904
+    },
+    "few_k5_prune_t50": {
+      "abstain_unanswerable": 0.54,
+      "citation_precision": 0.7467479674796749,
+      "correct": 0.74,
+      "unsupported_rate": 0.17314487632508835
+    },
+    "s0_naive_fused_k10": {
+      "abstain_unanswerable": 0.04,
+      "citation_precision": 0.5681787634408602,
+      "correct": 0.775,
+      "unsupported_rate": 0.33138686131386863
+    },
+    "s1_naive_2hop_k10": {
+      "abstain_unanswerable": 0.02,
+      "citation_precision": 0.5684898323452541,
+      "correct": 0.835,
+      "unsupported_rate": 0.3153961136023916
+    },
+    "s1_naive_2hop_k5": {
+      "abstain_unanswerable": 0.02,
+      "citation_precision": 0.5304551539491298,
+      "correct": 0.84,
+      "unsupported_rate": 0.29372937293729373
+    },
+    "s1_naive_rerank_k10": {
+      "abstain_unanswerable": 0.0,
+      "citation_precision": 0.5738190476190477,
+      "correct": 0.785,
+      "unsupported_rate": 0.3475699558173785
+    },
+    "zero_1hop_k5": {
+      "abstain_unanswerable": 0.42,
+      "citation_precision": 0.5247050147492625,
+      "correct": 0.775,
+      "unsupported_rate": 0.3352941176470588
+    },
+    "zero_k10": {
+      "abstain_unanswerable": 0.44,
+      "citation_precision": 0.5190895741556535,
+      "correct": 0.855,
+      "unsupported_rate": 0.21935483870967742
+    },
+    "zero_k3": {
+      "abstain_unanswerable": 0.42,
+      "citation_precision": 0.5438790560471976,
+      "correct": 0.83,
+      "unsupported_rate": 0.23823529411764705
+    },
+    "zero_k5": {
+      "abstain_unanswerable": 0.42,
+      "citation_precision": 0.5252192982456141,
+      "correct": 0.82,
+      "unsupported_rate": 0.27350427350427353
+    },
+    "zero_k5_prune_t30": {
+      "abstain_unanswerable": 0.62,
+      "citation_precision": 0.6426495726495727,
+      "correct": 0.705,
+      "unsupported_rate": 0.23157894736842105
+    },
+    "zero_k5_prune_t50": {
+      "abstain_unanswerable": 0.62,
+      "citation_precision": 0.6786458333333334,
+      "correct": 0.695,
+      "unsupported_rate": 0.21660649819494585
+    },
+    "zero_k5_prune_t70": {
+      "abstain_unanswerable": 0.66,
+      "citation_precision": 0.6955908289241622,
+      "correct": 0.69,
+      "unsupported_rate": 0.21189591078066913
+    },
+    "zero_k5_repair_t50": {
+      "abstain_unanswerable": 0.42,
+      "citation_precision": 0.5654239766081872,
+      "correct": 0.815,
+      "unsupported_rate": 0.2678062678062678
+    }
+  },
+  "tolerance": 0.02,
+  "verify_policy": "repair",
+  "verify_prompt": "zero_shot",
+  "verify_tau": 0.5
+}

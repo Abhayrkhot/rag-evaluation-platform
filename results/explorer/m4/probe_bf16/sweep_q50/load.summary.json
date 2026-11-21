@@ -1,0 +1,30 @@
+{
+  "completed_ok": 0,
+  "degraded_share": {},
+  "duration_s": 90.0,
+  "error_rate": 1.0,
+  "errors": 2979,
+  "max_send_lag_ms": 86.43517660985367,
+  "mean_ms": null,
+  "meta": {
+    "budget_ms": null,
+    "git_sha": "53d0d8e9dc0c",
+    "host": "explorer-d4053",
+    "label": "sweep_q50",
+    "python": "3.12.3",
+    "seed": 150,
+    "started_unix": 1795299428.1751556,
+    "url": "http://127.0.0.1:8080/v1/answer"
+  },
+  "offered": 2979,
+  "offered_qps": 49.65,
+  "p50_ms": null,
+  "p90_ms": null,
+  "p95_ms": null,
+  "p99_ms": null,
+  "route_reasons": {},
+  "route_share": {},
+  "target_qps": 50.0,
+  "wall_s": 120.51575752720237,
+  "warmup_s": 30.0
+}
