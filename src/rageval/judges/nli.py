@@ -113,7 +113,9 @@ class ClassNLI:
         self.batch_size = batch_size
         self.max_length = max_length
         labels = {v.lower(): int(k) for k, v in self.model.config.id2label.items()}
-        self.entail_idx = labels.get("entailment", 0)
+        # NLI models name the class "entailment"; binary grounding checkers (MiniCheck) put
+        # "supported" last
+        self.entail_idx = labels.get("entailment", labels.get("supported", len(labels) - 1))
 
     def prob(self, premises: Sequence[str], hypotheses: Sequence[str]) -> np.ndarray:
         from rageval.models import encode_sorted_batches
@@ -130,3 +132,21 @@ class ClassNLI:
                 logits = self.model(**enc).logits.float()
             out[idx] = logits.softmax(-1)[:, self.entail_idx].cpu().numpy()
         return out
+
+
+class EnsembleNLI:
+    """Several checkers that must agree: P(supported) = min over models. Used to cut the false
+    positives a single NLI model makes when the repair search tries many candidate documents."""
+
+    def __init__(self, models: Sequence[str], **kw: Any) -> None:
+        self.members = [ClassNLI(m, **kw) for m in models]
+        self.model_name = "+".join(models)
+
+    def prob(self, premises: Sequence[str], hypotheses: Sequence[str]) -> np.ndarray:
+        return np.minimum.reduce([m.prob(premises, hypotheses) for m in self.members])
+
+
+def load_verifier(spec: str, **kw: Any) -> Any:
+    """'modelA' or 'modelA+modelB' (ensemble)."""
+    parts = [x for x in spec.split("+") if x]
+    return ClassNLI(parts[0], **kw) if len(parts) == 1 else EnsembleNLI(parts, **kw)

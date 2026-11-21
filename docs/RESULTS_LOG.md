@@ -39,3 +39,10 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   reranker (parity vs HF: embedding cosine >= 0.9999, rerank Spearman 0.998): reranking at 30 QPS
   dropped from 10.6 s to 0.16 s p50, and the DeBERTa verifier became the bottleneck, so it now
   runs as three replicas across both GPUs.
+- **M2 dev iteration 3** (archived in `results/explorer/m2/dev_iter3`). Revise at tau 0.9 reached
+  86.9% TRUE citation precision (zero-shot) at correctness 0.825. Of the 63 remaining imprecise
+  statements, 35 were judged supported by gpt-oss: meta sentences ("... is not directly mentioned
+  in the documents") counted as claims, redundant second citations kept because minimisation used
+  the strict 0.9 threshold, and DeBERTa false positives even at 0.9. Iteration 4: wider abstention
+  patterns, minimisation at the NLI decision threshold (0.5), and an ensemble gate with MiniCheck
+  (DeBERTa-v3-large, Tang et al. 2024) that must agree with the NLI model.

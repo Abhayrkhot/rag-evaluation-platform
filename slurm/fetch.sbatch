@@ -14,7 +14,7 @@ in_image python3 - "$@" <<'PY'
 import sys, os
 from huggingface_hub import snapshot_download
 for repo in sys.argv[1:]:
-    p = snapshot_download(repo, allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.jinja", "tokenizer*"])
+    p = snapshot_download(repo, allow_patterns=["*.json", "*.safetensors", "*.bin", "*.txt", "*.model", "*.jinja", "tokenizer*"])
     missing = [f for f in os.listdir(p) if not os.path.exists(os.path.join(p, f))]
     print("ok", repo, p, "missing:", missing)
 PY

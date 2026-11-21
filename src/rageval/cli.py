@@ -12,6 +12,10 @@ import yaml
 from rageval.io import read_json, run_meta, write_json, write_jsonl
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, pretty_exceptions_enable=False)
+
+ENSEMBLE_VERIFIER = (
+    "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"
+)
 data_app = typer.Typer(no_args_is_help=True, help="Corpus and suite construction")
 index_app = typer.Typer(no_args_is_help=True, help="BM25 and FAISS indexes")
 ret_app = typer.Typer(no_args_is_help=True, help="Offline retrieval experiments")
@@ -355,6 +359,7 @@ def ret_materialize(
             ("__VPROMPT__", ch["verify_prompt"]),
             ("__POLICY__", ch["verify_policy"]),
             ("__TAU__", ch["verify_tau"]),
+            ("__VERIFIER__", json.dumps(ch.get("verifier"))),
         ):
             ptxt = ptxt.replace(key, str(val))
     (out_dir / "pipelines.yaml").write_text(ptxt)
@@ -533,11 +538,13 @@ def gen_run(
     records = asyncio.run(
         generate(qs, retriever.corpus, retrieved, cfgs, client, concurrency, params)
     )
-    prob = None
+    prob: dict[str, Any] = {}
     if any(c.verify != "none" for c in cfgs):
-        from rageval.judges.nli import ClassNLI
+        from rageval.judges.nli import load_verifier
 
-        prob = ClassNLI(models.verifier).prob
+        specs = {c.verifier or "default" for c in cfgs if c.verify != "none"}
+        for spec in sorted(specs):
+            prob[spec] = load_verifier(models.verifier if spec == "default" else spec).prob
     apply_verifier(records, retriever.corpus, prob, client=client, params=params)
     wall = records[0].pop("_wall_seconds", None) if records else None
     write_jsonl(out, records)
@@ -663,7 +670,7 @@ def gen_choose(
     import re
 
     S = read_json(dev_report)["summary"]
-    pat = re.compile(r"^(zero|few|cot)_k(\d+)(?:_(repair|prune|revise)_t(\d+))?$")
+    pat = re.compile(r"^(zero|few|cot)_k(\d+)(?:_(repair|prune|revise|revens)_t(\d+))?$")
     strat = {"zero": "zero_shot", "few": "few_shot", "cot": "cot"}
 
     def m(name: str, key: str) -> float:
@@ -698,17 +705,20 @@ def gen_choose(
             continue
         if best_v is None or m(n, "citation_precision") > best_v[0]:
             best_v = (m(n, "citation_precision"), n)
-    policy, tau, vprompt = "none", 0.5, strat[prompt]
+    policy, tau, vprompt, verifier = "none", 0.5, strat[prompt], None
     if best_v is not None:
         x = pat.match(best_v[1])
         assert x is not None
         policy, tau, vprompt = x.group(3), int(x.group(4)) / 100, strat[x.group(1)]
+        if policy == "revens":
+            policy, verifier = "revise", ENSEMBLE_VERIFIER
     choice = {
         "context_k": k,
         "best_prompt": strat[prompt],
         "verify_policy": policy,
         "verify_tau": tau,
         "verify_prompt": vprompt,
+        "verifier": verifier,
         "verify_pipeline": best_v[1] if best_v else None,
         "tolerance": tolerance,
         "dev_evidence": {

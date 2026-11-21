@@ -26,6 +26,11 @@ import numpy as np
 from rageval.generation.citations import ParsedAnswer, Statement, render
 from rageval.generation.prompts import ABSTAIN
 
+# Deciding that a citation is unnecessary uses the plain NLI decision threshold even when the
+# acceptance threshold tau is stricter: a stricter cut there keeps redundant citations, which
+# ALCE counts as imprecise.
+MIN_TAU = 0.5
+
 ProbFn = Callable[[Sequence[str], Sequence[str]], np.ndarray]
 AsyncProbFn = Callable[[Sequence[str], Sequence[str]], Awaitable[np.ndarray]]
 
@@ -185,7 +190,7 @@ async def _check(
     record: dict[str, Any] = {"text": s.text, "before": [c + 1 for c in cites0]}
     joint_ok = bool(cites0) and (await P.get([(_premise(docs, cites0), s.text)]))[0] >= tau
     if joint_ok:
-        return await _minimize(cites0, s, docs, P, tau), record, "kept"
+        return await _minimize(cites0, s, docs, P, MIN_TAU), record, "kept"
     allowed = [i for i in range(n) if _overlaps(s.text, docs[i])]
     if 0 < len(cites0) < 3:
         extra = [d for d in allowed if d not in cites0]
@@ -193,7 +198,7 @@ async def _check(
         j = int(np.argmax(probs)) if probs else -1
         if j >= 0 and probs[j] >= tau:
             return (
-                await _minimize(sorted([*cites0, extra[j]]), s, docs, P, tau),
+                await _minimize(sorted([*cites0, extra[j]]), s, docs, P, MIN_TAU),
                 record,
                 "completed",
             )

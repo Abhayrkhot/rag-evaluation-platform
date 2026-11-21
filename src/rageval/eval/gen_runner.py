@@ -168,18 +168,33 @@ def apply_verifier(
     from rageval.generation.prompts import revise_messages
     from rageval.serve.batcher import MicroBatcher
 
-    batcher = None
-    if prob is not None:
-        batcher = MicroBatcher(
-            lambda pairs: prob([p for p, _ in pairs], [h for _, h in pairs]),
-            "verify-offline",
-            max_items=512,
-            max_wait_ms=20,
-        )
+    # one micro-batcher per verifier spec ("default" = ModelsConfig.verifier); prob may be a
+    # callable (default only) or {spec: callable}
+    probs: dict[str, Any] = (
+        prob if isinstance(prob, dict) else ({"default": prob} if prob is not None else {})
+    )
+    batchers: dict[str, MicroBatcher] = {}
 
-    async def aprob(ps: Sequence[str], hs: Sequence[str]) -> Any:
-        assert batcher is not None
-        return await batcher.submit(list(zip(ps, hs, strict=True)))
+    def batcher_for(spec: str) -> MicroBatcher:
+        if spec not in batchers:
+            fn = probs[spec]
+
+            def run(pairs: list[tuple[str, str]], fn: Any = fn) -> Any:
+                return fn([p for p, _ in pairs], [h for _, h in pairs])
+
+            batchers[spec] = MicroBatcher(
+                run,
+                f"verify-{spec}",
+                max_items=512,
+                max_wait_ms=20,
+            )
+        return batchers[spec]
+
+    def aprob_for(spec: str) -> Any:
+        async def aprob(ps: Sequence[str], hs: Sequence[str]) -> Any:
+            return await batcher_for(spec).submit(list(zip(ps, hs, strict=True)))
+
+        return aprob
 
     reviser = ChatClient(client.base_url, client.model, timeout=client.timeout) if client else None
 
@@ -189,6 +204,7 @@ def apply_verifier(
         if cfg.verify != "none" and not rec.get("error"):
             docs = [(corpus[d].title, corpus[d].text) for d in rec["context"]]
             t0 = time.perf_counter()
+            aprob = aprob_for(cfg.verifier or "default")
             parsed, st = await averify_answer(
                 parsed, docs, aprob, tau=cfg.verify_tau, policy=cfg.verify
             )
@@ -228,8 +244,8 @@ def apply_verifier(
         await asyncio.gather(*(guarded(r) for r in records))
 
     asyncio.run(all_())
-    if batcher is not None:
-        batcher.close()
+    for b in batchers.values():
+        b.close()
 
 
 def _parsed_dict(p: Any) -> dict[str, Any]:

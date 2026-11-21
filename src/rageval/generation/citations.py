@@ -15,11 +15,11 @@ INITIALS = re.compile(r"\b(?:[A-Z]\.){1,}(?=\s*[A-Z]?)")
 SPLIT = re.compile(r"(?<=[.!?])[\"')\]]*\s+(?=[\"'(]?[A-Z0-9])")
 ABSTAIN_RE = re.compile(
     r"(cannot|can't|can ?not|unable to|not able to)\s+(be\s+)?(answer|determine|find|tell|say|identify|confirm)"
-    r"|(do|does|did)\s?(n't| not)\s+(contain|provide|mention|include|state|specify|say|give)"
+    r"|(do|does|did)\s?(n't| not)\s+(directly\s+|explicitly\s+|specifically\s+)?(contain|provide|mention|include|state|specify|say|give)"
     r"|(not|no)\s+(enough|sufficient)\s+(information|evidence|detail)"
     r"|insufficient\s+(information|evidence)"
-    r"|no\s+(relevant\s+)?information"
-    r"|(is|are)\s+not\s+(mentioned|stated|specified|provided)",
+    r"|no\s+(relevant\s+|direct\s+|explicit\s+)?(information|mention)"
+    r"|(is|are|was|were)\s+not\s+(directly\s+|explicitly\s+|specifically\s+|clearly\s+)?(mentioned|stated|specified|provided|given)",
     re.IGNORECASE,
 )
 _DOT = "․"  # one-dot leader, a placeholder that never ends a sentence

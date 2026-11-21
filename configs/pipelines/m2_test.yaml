@@ -11,7 +11,7 @@ pipelines:
   s0_baseline: {retrieval: {hops: 1, rerank: false}, context_k: 10, prompt: naive}
   s1a_rerank: {retrieval: {hops: 1}, prompt: naive}
   s1b_2hop: {prompt: naive}
-  s4_verified: {prompt: __VPROMPT__, verify: __POLICY__, verify_tau: __TAU__}
+  s4_verified: {prompt: __VPROMPT__, verify: __POLICY__, verify_tau: __TAU__, verifier: __VERIFIER__}
   # prompt strategies (M3): identical contexts, paired comparisons
   zero_shot: {}
   few_shot: {prompt: few_shot}

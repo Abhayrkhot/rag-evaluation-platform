@@ -1,7 +1,7 @@
-# M2 dev sweep (250 dev questions), iteration 3: lexical grounding gate on re-citation, "v."
-# abbreviation fix, revise threshold sweep at K=10 (iteration 2 picked K=10).
+# M2 dev sweep (250 dev questions), iteration 4: meta sentences ("... is not directly mentioned")
+# are abstentions, citation minimisation at the plain NLI threshold, and an ensemble verifier
+# (DeBERTa NLI and MiniCheck must both accept; policy name "revens" = revise with the ensemble).
 # __RETRIEVAL__ = dev-selected hybrid+rerank + two-hop splice; `hops: 1` turns the second hop off.
-# Names follow <prompt>_k<K>[_<policy>_t<tau*100>] so `rageval gen choose` can parse them.
 base:
   retrieval: __RETRIEVAL__
   context_k: 10
@@ -15,12 +15,11 @@ pipelines:
   zero_k10: {}
   few_k10: {prompt: few_shot}
   cot_k10: {prompt: cot}
-  zero_k10_revise_t50: {verify: revise, verify_tau: 0.5}
-  zero_k10_revise_t70: {verify: revise, verify_tau: 0.7}
   zero_k10_revise_t90: {verify: revise, verify_tau: 0.9}
-  few_k10_revise_t50: {prompt: few_shot, verify: revise, verify_tau: 0.5}
-  few_k10_revise_t70: {prompt: few_shot, verify: revise, verify_tau: 0.7}
   few_k10_revise_t90: {prompt: few_shot, verify: revise, verify_tau: 0.9}
-  cot_k10_revise_t50: {prompt: cot, verify: revise, verify_tau: 0.5}
-  cot_k10_revise_t70: {prompt: cot, verify: revise, verify_tau: 0.7}
-  cot_k10_revise_t90: {prompt: cot, verify: revise, verify_tau: 0.9}
+  zero_k10_revens_t50: {verify: revise, verify_tau: 0.5, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  zero_k10_revens_t70: {verify: revise, verify_tau: 0.7, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  zero_k10_revens_t90: {verify: revise, verify_tau: 0.9, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  few_k10_revens_t70: {prompt: few_shot, verify: revise, verify_tau: 0.7, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  few_k10_revens_t90: {prompt: few_shot, verify: revise, verify_tau: 0.9, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  cot_k10_revens_t90: {prompt: cot, verify: revise, verify_tau: 0.9, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}

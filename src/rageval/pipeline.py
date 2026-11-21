@@ -18,6 +18,7 @@ class PipelineConfig(BaseModel):
     prompt: str = "zero_shot"  # naive | zero_shot | few_shot | cot
     verify: str = "none"  # none | repair | prune | revise
     verify_tau: float = 0.5
+    verifier: str | None = None  # overrides ModelsConfig.verifier; "a+b" = ensemble
     temperature: float = 0.0
     max_tokens: int | None = None
 
