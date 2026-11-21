@@ -154,8 +154,9 @@ def create_encoder_app(
 
 
 class _Remote:
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 30.0, model: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
+        self.model = model  # sent as "model" (required by vLLM's OpenAI-compatible endpoints)
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
         self.batches = self.items = 0
@@ -184,7 +185,10 @@ class _Remote:
 class RemoteEmbedClient(_Remote):
     async def submit(self, texts: Sequence[str]) -> np.ndarray:
         self.items += len(texts)
-        d = await self._post("/v1/embeddings", {"input": list(texts)})
+        body: dict[str, Any] = {"input": list(texts)}
+        if self.model:
+            body["model"] = self.model
+        d = await self._post("/v1/embeddings", body)
         rows = sorted(d["data"], key=lambda r: r["index"])
         return np.asarray([r["embedding"] for r in rows], dtype=np.float32)
 
@@ -198,7 +202,10 @@ class RemoteRerankClient(_Remote):
         for i, (q, _) in enumerate(pairs):
             groups.setdefault(q, []).append(i)
         for q, idx in groups.items():
-            d = await self._post("/rerank", {"query": q, "documents": [pairs[i][1] for i in idx]})
+            body: dict[str, Any] = {"query": q, "documents": [pairs[i][1] for i in idx]}
+            if self.model:
+                body["model"] = self.model
+            d = await self._post("/rerank", body)
             for r in d["results"]:
                 out[idx[int(r["index"])]] = float(r["relevance_score"])
         return out

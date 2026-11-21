@@ -22,14 +22,17 @@ echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER agent=$AGENT" > "$R/l
 
 QARGS=(); [ "$PRECISION" = fp8 ] && QARGS=(--quantization fp8)
 start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization 0.9 --seed 0 "${QARGS[@]}"
-start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.35 --seed 0
+start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.3 --seed 0
 
-# encoder servers: one process per model on GPU1, shared by every API restart
+# encoders on GPU1: embedder and reranker served by vLLM's pooling runner (CUDA graphs, unpadded
+# batches); the NLI verifier (DeBERTa, not supported by vLLM) in its own micro-batched process.
+start_vllm "$EMB" 8101 1 --runner pooling --max-model-len 512 --gpu-memory-utilization 0.06
+start_vllm "$RERANKER" 8102 1 --runner pooling --max-model-len 4096 --gpu-memory-utilization 0.06
 ENC_PIDS=()
-ENC_PIDS+=($(start_bg enc-embed 1 http://127.0.0.1:8101/health python3 -m rageval.cli encoders serve --kind embed --model "$EMB" --port 8101 --max-wait-ms 2))
-ENC_PIDS+=($(start_bg enc-rerank 1 http://127.0.0.1:8102/health python3 -m rageval.cli encoders serve --kind rerank --model "$RERANKER" --port 8102 --max-wait-ms 4 --batch-size 256))
-ENC_PIDS+=($(start_bg enc-nli 1 http://127.0.0.1:8103/health python3 -m rageval.cli encoders serve --kind nli --model MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli --port 8103 --max-wait-ms 4))
+ENC_PIDS+=($(start_bg enc-nli 1 http://127.0.0.1:8103/health python3 -m rageval.cli encoders serve --kind nli --model MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli --port 8103 --max-wait-ms "${NLI_WAIT_MS:-8}"))
 trap 'for p in "${ENC_PIDS[@]}"; do stop_bg "$p"; done; stop_vllms' EXIT
+CUDA_VISIBLE_DEVICES=1 cli bench parity --out "$R/parity.json" --embed-url http://127.0.0.1:8101 --embedder "$EMB" \
+  --rerank-url http://127.0.0.1:8102 --reranker "$RERANKER" --candidates "artifacts/cands/dev__$EMB_SLUG.jsonl"
 URLS=(--set models.embedder_url=http://127.0.0.1:8101 --set models.reranker_url=http://127.0.0.1:8102 --set models.verifier_url=http://127.0.0.1:8103)
 API_WORKERS=${API_WORKERS:-4}
 

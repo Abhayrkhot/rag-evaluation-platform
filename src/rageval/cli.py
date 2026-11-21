@@ -855,6 +855,70 @@ def bench_encoders(
     _echo(res)
 
 
+@bench_app.command("parity")
+def bench_parity(
+    out: Annotated[Path, typer.Option()],
+    embed_url: Annotated[str, typer.Option()],
+    embedder: Annotated[str, typer.Option()],
+    rerank_url: Annotated[str, typer.Option()],
+    reranker: Annotated[str, typer.Option()],
+    candidates: Annotated[Path, typer.Option()],
+    suite: Annotated[Path, typer.Option()] = Path("data/hotpot100k/dev.jsonl"),
+    corpus: Annotated[Path, typer.Option()] = Path("data/hotpot100k/corpus.jsonl"),
+    n: int = 100,
+) -> None:
+    """Served (vLLM) embeddings and rerank scores vs the in-process HF models the indexes and
+    offline results were built with: cosine for embeddings, rank correlation for reranking."""
+    import asyncio
+
+    import numpy as np
+    from scipy.stats import spearmanr
+
+    from rageval.corpus import Corpus, load_suite
+    from rageval.models import HFCrossEncoder, HFEmbedder
+    from rageval.retrieval.dense import format_query
+    from rageval.retrieval.experiments import load_candidates
+    from rageval.serve.encoders import RemoteEmbedClient, RemoteRerankClient
+
+    c = Corpus.load(corpus)
+    qs = load_suite(suite)[:n]
+    cands = load_candidates(candidates)
+    qtexts = [format_query(embedder, q.question) for q in qs]
+    dtexts = [c.index_text(cands[q.qid]["hnsw"][0].doc_id) for q in qs]
+    hf_e = HFEmbedder(embedder, batch_size=64)
+    ref = np.concatenate([hf_e.embed(qtexts), hf_e.embed(dtexts)])
+    del hf_e
+
+    async def served() -> tuple[np.ndarray, list[np.ndarray]]:
+        ec = RemoteEmbedClient(embed_url, model=embedder)
+        rc = RemoteRerankClient(rerank_url, model=reranker)
+        e = np.concatenate([await ec.submit(qtexts), await ec.submit(dtexts)])
+        rs = []
+        for q in qs[:30]:
+            docs = [c.index_text(h.doc_id) for h in cands[q.qid]["hnsw"][:50]]
+            rs.append(await rc.submit([(q.question, d) for d in docs]))
+        return e, rs
+
+    e, rs = asyncio.run(served())
+    cos = (ref * e).sum(1) / (np.linalg.norm(ref, axis=1) * np.linalg.norm(e, axis=1))
+    ce = HFCrossEncoder(reranker, batch_size=64)
+    rhos, top10 = [], []
+    for q, r in zip(qs[:30], rs, strict=True):
+        docs = [c.index_text(h.doc_id) for h in cands[q.qid]["hnsw"][:50]]
+        h = ce.score([(q.question, d) for d in docs])
+        rhos.append(float(spearmanr(h, r).statistic))
+        top10.append(len(set(np.argsort(-h)[:10]) & set(np.argsort(-r)[:10])) / 10)
+    res = {
+        "embed_cosine_min": float(cos.min()),
+        "embed_cosine_mean": float(cos.mean()),
+        "rerank_spearman_mean": float(np.mean(rhos)),
+        "rerank_spearman_min": float(np.min(rhos)),
+        "rerank_top10_overlap_mean": float(np.mean(top10)),
+    }
+    write_json(out, {"meta": run_meta(embedder=embedder, reranker=reranker), **res})
+    _echo(res)
+
+
 # ---------------------------------------------------------------- serving / load
 
 

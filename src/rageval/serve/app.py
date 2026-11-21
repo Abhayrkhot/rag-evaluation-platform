@@ -113,7 +113,7 @@ def build_agent(cfg: ServeConfig) -> RAGAgent:
 
     embed_b: Any
     if m.embedder_url:
-        embed_b = RemoteEmbedClient(m.embedder_url)
+        embed_b = RemoteEmbedClient(m.embedder_url, model=m.embedder)
     else:
         emb = HFEmbedder(m.embedder, device=cfg.device, batch_size=cfg.embed_batch.max_items)
         embed_b = MicroBatcher(
@@ -122,7 +122,7 @@ def build_agent(cfg: ServeConfig) -> RAGAgent:
     rerank_b: Any = None
     if m.reranker and cfg.agent.retrieval.rerank:
         if m.reranker_url:
-            rerank_b = RemoteRerankClient(m.reranker_url)
+            rerank_b = RemoteRerankClient(m.reranker_url, model=m.reranker)
         else:
             ce = HFCrossEncoder(m.reranker, device=cfg.device, batch_size=128)
             rerank_b = MicroBatcher(
