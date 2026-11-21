@@ -17,9 +17,11 @@ import numpy as np
 from rageval.io import read_json, read_jsonl
 
 
-def load_run(run_dir: Path, warmup_s: float = 30.0) -> dict[str, Any]:
-    rows = [r for r in read_jsonl(run_dir / "load.jsonl") if r["at"] >= warmup_s]
+def load_run(run_dir: Path, warmup_s: float | None = None) -> dict[str, Any]:
+    """Steady-state rows of one run; the warm-up defaults to the one the run recorded."""
     summary = read_json(run_dir / "load.summary.json")
+    w = summary.get("warmup_s", 30.0) if warmup_s is None else warmup_s
+    rows = [r for r in read_jsonl(run_dir / "load.jsonl") if r["at"] >= w]
     return {"rows": rows, "summary": summary, "name": run_dir.name}
 
 

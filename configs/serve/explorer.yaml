@@ -1,0 +1,17 @@
+# Serving config for the Explorer load tests. __PLACEHOLDERS__ are filled by
+# `rageval serve materialize` from the dev-selected retrieval (results/m1), the serving rerank
+# profile (results/m4/prep) and the dev-selected generation settings (results/m2).
+models:
+  corpus: data/hotpot100k/corpus.jsonl
+  index_dir: artifacts/index/hotpot100k
+  embedder: __EMBEDDER__
+  dense_index: hnsw
+  reranker: __RERANKER__
+  verifier: MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli
+  generator: Qwen/Qwen3-8B
+  generator_url: http://127.0.0.1:8000
+  fallback: Qwen/Qwen3-1.7B
+  fallback_url: http://127.0.0.1:8001
+agent: __AGENT__
+router: static
+telemetry: {service: rag-agent}

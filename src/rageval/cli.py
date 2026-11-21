@@ -788,6 +788,25 @@ def serve(
     )
 
 
+@app.command("serve-materialize")
+def serve_materialize(
+    template: Annotated[Path, typer.Option()],
+    out: Annotated[Path, typer.Option()],
+    embedder: Annotated[str, typer.Option()],
+    reranker: Annotated[str, typer.Option()],
+    agent: Annotated[str, typer.Option(help="AgentConfig as JSON")],
+) -> None:
+    """Fill a serving config template; the filled file is kept next to the load-test results."""
+    from rageval.agent.graph import AgentConfig
+
+    AgentConfig.model_validate(json.loads(agent))  # fail early on a bad config
+    txt = template.read_text().replace("__EMBEDDER__", embedder).replace("__RERANKER__", reranker)
+    txt = txt.replace("__AGENT__", json.dumps(json.loads(agent), sort_keys=True))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(txt)
+    _echo({"out": str(out)})
+
+
 lt_app = typer.Typer(no_args_is_help=True, help="Open-loop load tests")
 app.add_typer(lt_app, name="loadtest")
 
