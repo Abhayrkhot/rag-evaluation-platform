@@ -45,7 +45,7 @@ cli gen merge --records "$R/${tag}_gen.jsonl" --nli "$R/${tag}_nli.json" --llm "
 PAIRS=()
 if [ "$tag" != dev ]; then
   PAIRS=(--pairs zero_shot:few_shot --pairs zero_shot:cot --pairs s0_baseline:s4_verified --pairs zero_shot:s4_verified
-         --pairs s1a_rerank:s1b_2hop --pairs s0_baseline:s1a_rerank)
+         --pairs s1a_rerank:s1b_2hop --pairs s0_baseline:s1a_rerank --pairs s0_baseline:s4_strict --pairs s4_verified:s4_strict)
 fi
 cli gen report --judged "$R/${tag}_judged.jsonl" --out "$R/${tag}_report.json" "${PAIRS[@]}"
 if [ "$tag" = dev ]; then cli gen choose --dev-report "$R/dev_report.json" --out "$R/test_choices.json"; fi

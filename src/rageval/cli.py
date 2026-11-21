@@ -360,6 +360,9 @@ def ret_materialize(
             ("__POLICY__", ch["verify_policy"]),
             ("__TAU__", ch["verify_tau"]),
             ("__VERIFIER__", json.dumps(ch.get("verifier"))),
+            ("__SPROMPT__", ch.get("strict_prompt")),
+            ("__STAU__", ch.get("strict_tau")),
+            ("__SVERIFIER__", json.dumps(ch.get("strict_verifier"))),
         ):
             ptxt = ptxt.replace(key, str(val))
     (out_dir / "pipelines.yaml").write_text(ptxt)
@@ -712,7 +715,19 @@ def gen_choose(
         policy, tau, vprompt = x.group(3), int(x.group(4)) / 100, strat[x.group(1)]
         if policy == "revens":
             policy, verifier = "revise", ENSEMBLE_VERIFIER
+    # strict operating point: the highest citation precision at that K, whatever it costs in
+    # correctness (reported next to the balanced choice, never instead of it)
+    strict = max(
+        (n for n, x in parsed.items() if x and x.group(3) and int(x.group(2)) == k),
+        key=lambda n: m(n, "citation_precision"),
+        default=None,
+    )
+    sx = pat.match(strict) if strict else None
     choice = {
+        "strict_pipeline": strict,
+        "strict_prompt": strat[sx.group(1)] if sx else None,
+        "strict_tau": int(sx.group(4)) / 100 if sx else None,
+        "strict_verifier": ENSEMBLE_VERIFIER if sx and sx.group(3) == "revens" else None,
         "context_k": k,
         "best_prompt": strat[prompt],
         "verify_policy": policy,
