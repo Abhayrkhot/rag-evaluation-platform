@@ -32,11 +32,13 @@ def bow(texts, dim=64):
 
 
 class FakeLLM:
-    def __init__(self, name, text):
-        self.name, self.text, self.calls = name, text, 0
+    def __init__(self, name, text, plan="Tyler Bates"):
+        self.name, self.text, self.plan, self.calls = name, text, plan, 0
 
     async def chat(self, messages, timeout=None, **kw):
         self.calls += 1
+        if "plan searches" in messages[0]["content"]:
+            return ChatResult(text=self.plan, model=self.name, completion_tokens=3)
         return ChatResult(text=self.text, model=self.name, prompt_tokens=10, completion_tokens=5)
 
 
@@ -45,7 +47,7 @@ def nli(pairs):
     return np.array([1.0 if h.split()[0] in p else 0.0 for p, h in pairs], dtype=np.float32)
 
 
-def make_agent(answer, **cfg):
+def make_agent(answer, rc_over=None, **cfg):
     corpus = Corpus(DOCS)
     texts = [corpus.index_text(d.doc_id) for d in DOCS]
     bm25 = BM25Index().build(corpus.ids, texts)
@@ -58,7 +60,7 @@ def make_agent(answer, **cfg):
     verify = MicroBatcher(nli, "verify")
     primary = FakeLLM("primary", answer)
     router = FallbackRouter(primary, FakeLLM("fallback", answer), RouterPolicy(hedge=False))
-    rc = RetrievalConfig(bm25_k=4, dense_k=4, rerank_depth=4, final_k=4)
+    rc = RetrievalConfig(bm25_k=4, dense_k=4, rerank_depth=4, final_k=4, **(rc_over or {}))
     agent = RAGAgent(
         corpus,
         bm25,
@@ -68,7 +70,7 @@ def make_agent(answer, **cfg):
         rerank,
         verify,
         router,
-        AgentConfig(retrieval=rc, context_k=3, **cfg),
+        AgentConfig(retrieval=rc, **({"context_k": 3} | cfg)),
     )
     return agent
 
@@ -118,3 +120,16 @@ def test_http_api_and_metrics(tmp_path):
         assert ret["titles"][0] == "Paris"
     lines = (tmp_path / "trace.jsonl").read_text().strip().splitlines()
     assert len(lines) == 1 and '"route":"primary"' in lines[0]
+
+
+async def test_two_hop_plans_and_splices_second_hop():
+    agent = make_agent(
+        "Paris is the capital of France [1].",
+        rc_over={"hops": 2, "plan_k": 2, "hop2_depth": 4, "hop2_keep": 1, "hop2_take": 1},
+        context_k=3,
+        verify="none",
+    )
+    out = await agent.answer("What is the capital of France?")
+    assert out["followup"] == "Tyler Bates"
+    assert "plan" in out["timings"] and "retrieve2" in out["timings"]
+    assert out["response"]["context"][1] == "d4"  # second-hop hit spliced after the first-hop head

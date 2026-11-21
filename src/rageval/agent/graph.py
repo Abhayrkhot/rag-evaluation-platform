@@ -1,11 +1,14 @@
 """The serving agent: a LangGraph state machine over the RAG pipeline.
 
-    START -> retrieve -> (rerank | fuse_only) -> generate -> (verify | skip_verify) -> finalize -> END
+    START -> retrieve -> (rerank | fuse_only) -> [plan -> retrieve2] -> generate
+          -> (verify | skip_verify) -> finalize -> END
 
 retrieve   BM25 (thread pool) and dense search (micro-batched query embedding + FAISS) in
            parallel, fused with RRF or weighted fusion
 rerank     cross-encoder over the fused head (micro-batched across concurrent requests)
 fuse_only  taken when reranking is disabled, or skipped because the request is behind its deadline
+plan       (two-hop) the LLM names the article still missing for a bridge question
+retrieve2  (two-hop) hybrid + rerank for that query, spliced into the first-hop ranking
 generate   grounded, cited answer through the FallbackRouter (primary / fallback model)
 verify     NLI citation verification and repair (micro-batched)
 finalize   response assembly
@@ -38,6 +41,7 @@ from rageval.retrieval.bm25 import BM25Index
 from rageval.retrieval.dense import DenseIndex, format_query
 from rageval.retrieval.fusion import fuse
 from rageval.retrieval.hybrid import RetrievalConfig
+from rageval.retrieval.multihop import merge_hops, parse_followup, plan_messages
 from rageval.serve import telemetry as tm
 from rageval.serve.batcher import MicroBatcher
 
@@ -51,6 +55,7 @@ class AgentConfig(BaseModel):
     budget_ms: float | None = None  # per-request deadline; None = no deadline
     adaptive: bool = False  # skip rerank / verify when the deadline is close
     rerank_min_remaining_ms: float = 3000.0
+    plan_min_remaining_ms: float = 3500.0  # second hop only when this much budget is left
     verify_min_remaining_ms: float = 400.0
     verify_reserve_ms: float = 150.0  # budget held back from generation for verification
     gen_params: dict[str, Any] = Field(default_factory=dict)
@@ -63,6 +68,7 @@ class AgentState(TypedDict, total=False):
     budget_ms: float | None
     fused: list[str]
     hits: list[str]
+    followup: str | None
     context: list[str]
     raw: str
     parsed: ParsedAnswer
@@ -145,9 +151,8 @@ class RAGAgent:
 
     # ------------------------------------------------------------------ nodes
 
-    async def n_retrieve(self, state: AgentState) -> dict[str, Any]:
+    async def _search(self, q: str, keep: int) -> list[str]:
         rc = self.cfg.retrieval
-        q = state["question"]
         loop = asyncio.get_running_loop()
         sparse_f = loop.run_in_executor(self.pool, self.bm25.search, [q], rc.bm25_k)
         qv = await self.embed.submit([format_query(self.embed_model, q)])
@@ -156,16 +161,41 @@ class RAGAgent:
         )
         sparse = await sparse_f
         fused = fuse(sparse[0], dense[0], rc.fusion, rc.rrf_k, rc.alpha)
-        keep = max(rc.rerank_depth, self.cfg.context_k)
-        return {"fused": [h.doc_id for h in fused[:keep]]}
+        return [h.doc_id for h in fused[:keep]]
 
-    async def n_rerank(self, state: AgentState) -> dict[str, Any]:
+    async def _rerank(self, q: str, cand: list[str]) -> list[str]:
         assert self.rerank_b is not None
-        cand = state["fused"][: self.cfg.retrieval.rerank_depth]
-        q = state["question"]
         scores = await self.rerank_b.submit([(q, self.corpus.index_text(d)) for d in cand])
         order = np.argsort(-np.asarray(scores), kind="stable")
-        return {"hits": [cand[i] for i in order]}
+        return [cand[i] for i in order]
+
+    async def n_retrieve(self, state: AgentState) -> dict[str, Any]:
+        keep = max(self.cfg.retrieval.rerank_depth, self.cfg.context_k)
+        return {"fused": await self._search(state["question"], keep)}
+
+    async def n_rerank(self, state: AgentState) -> dict[str, Any]:
+        cand = state["fused"][: self.cfg.retrieval.rerank_depth]
+        return {"hits": await self._rerank(state["question"], cand)}
+
+    async def n_plan(self, state: AgentState) -> dict[str, Any]:
+        rc = self.cfg.retrieval
+        docs = [(self.corpus[d].title, self.corpus[d].text) for d in state["hits"][: rc.plan_k]]
+        rr = await self.router.chat(
+            plan_messages(state["question"], docs),
+            remaining_ms=self.remaining_ms(state),
+            max_tokens=32,
+            temperature=0.0,
+            **self.cfg.gen_params,
+        )
+        tm.ROUTE_TOTAL.labels(f"plan:{rr.route}", rr.reason).inc()
+        return {"followup": parse_followup(rr.result.text)}
+
+    async def n_retrieve2(self, state: AgentState) -> dict[str, Any]:
+        rc = self.cfg.retrieval
+        q2 = state.get("followup") or ""
+        cand = await self._search(q2, max(rc.hop2_depth, rc.hop2_take))
+        hop2 = await self._rerank(q2, cand[: rc.hop2_depth]) if self.rerank_b is not None else cand
+        return {"hits": merge_hops(state["hits"], hop2, rc.hop2_keep, rc.hop2_take)}
 
     async def n_fuse_only(self, state: AgentState) -> dict[str, Any]:
         upd: dict[str, Any] = {"hits": state["fused"]}
@@ -252,6 +282,18 @@ class RAGAgent:
             return "fuse_only"
         return "rerank"
 
+    def e_after_hop1(self, state: AgentState) -> str:
+        if self.cfg.retrieval.hops < 2:
+            return "generate"
+        rem = self.remaining_ms(state)
+        if self.cfg.adaptive and rem is not None and rem < self.cfg.plan_min_remaining_ms:
+            tm.DEGRADED_TOTAL.labels("hop2").inc()
+            return "generate"
+        return "plan"
+
+    def e_after_plan(self, state: AgentState) -> str:
+        return "retrieve2" if state.get("followup") else "generate"
+
     def e_after_generate(self, state: AgentState) -> str:
         if self.cfg.verify == "none" or self.verifier is None or state["parsed"].abstained:
             return "finalize"
@@ -266,6 +308,8 @@ class RAGAgent:
             ("retrieve", self.n_retrieve),
             ("rerank", self.n_rerank),
             ("fuse_only", self.n_fuse_only),
+            ("plan", self.n_plan),
+            ("retrieve2", self.n_retrieve2),
             ("generate", self.n_generate),
             ("verify", self.n_verify),
             ("skip_verify", self.n_skip_verify),
@@ -274,8 +318,10 @@ class RAGAgent:
             g.add_node(name, cast(Any, self._traced(name, fn)))
         g.add_edge(START, "retrieve")
         g.add_conditional_edges("retrieve", self.e_after_retrieve, ["rerank", "fuse_only"])
-        g.add_edge("rerank", "generate")
-        g.add_edge("fuse_only", "generate")
+        g.add_conditional_edges("rerank", self.e_after_hop1, ["plan", "generate"])
+        g.add_conditional_edges("fuse_only", self.e_after_hop1, ["plan", "generate"])
+        g.add_conditional_edges("plan", self.e_after_plan, ["retrieve2", "generate"])
+        g.add_edge("retrieve2", "generate")
         g.add_conditional_edges(
             "generate", self.e_after_generate, ["verify", "skip_verify", "finalize"]
         )
