@@ -1,0 +1,26 @@
+# M2 dev sweep (250 dev questions). Every choice used on the test suite is made here.
+# base.retrieval is the dev-selected hybrid+rerank config from results/m1/selected.json.
+base:
+  retrieval: __RETRIEVAL__
+  context_k: 5
+  prompt: zero_shot
+  verify: none
+pipelines:
+  # citation-precision stages
+  s0_naive_fused_k10: {retrieval: {rerank: false}, context_k: 10, prompt: naive}
+  s1_naive_rerank_k10: {context_k: 10, prompt: naive}
+  s1_naive_rerank_k5: {context_k: 5, prompt: naive}
+  # context size under the rules prompt
+  zero_k3: {context_k: 3}
+  zero_k5: {context_k: 5}
+  zero_k10: {context_k: 10}
+  # prompt strategies
+  few_k5: {prompt: few_shot}
+  cot_k5: {prompt: cot}
+  # verifier policy and threshold
+  zero_k5_repair_t50: {verify: repair, verify_tau: 0.5}
+  zero_k5_prune_t30: {verify: prune, verify_tau: 0.3}
+  zero_k5_prune_t50: {verify: prune, verify_tau: 0.5}
+  zero_k5_prune_t70: {verify: prune, verify_tau: 0.7}
+  few_k5_prune_t50: {prompt: few_shot, verify: prune, verify_tau: 0.5}
+  cot_k5_prune_t50: {prompt: cot, verify: prune, verify_tau: 0.5}

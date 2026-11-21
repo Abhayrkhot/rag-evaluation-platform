@@ -1,0 +1,5 @@
+# CPU smoke grid (box): sanity-check the plumbing with small models.
+bm25_only: {fusion: [bm25]}
+dense_only: {fusion: [dense], dense_index: [flat, hnsw]}
+rrf: {fusion: [rrf], rrf_k: [60]}
+rrf_rerank: {fusion: [rrf], rrf_k: [60], rerank_depth: [20, 50]}

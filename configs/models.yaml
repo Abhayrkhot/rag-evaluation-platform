@@ -1,0 +1,11 @@
+# Explorer model set. embedder / reranker are the dev-selected ones (results/m1/selected.json).
+corpus: data/hotpot100k/corpus.jsonl
+index_dir: artifacts/index/hotpot100k
+embedder: __EMBEDDER__
+dense_index: hnsw
+reranker: __RERANKER__
+verifier: MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli
+generator: Qwen/Qwen3-8B
+generator_url: http://127.0.0.1:8000
+fallback: Qwen/Qwen3-1.7B
+fallback_url: http://127.0.0.1:8001

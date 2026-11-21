@@ -1,0 +1,8 @@
+# Dev-only grid (250 questions). The selected config is then scored once on test and full.
+bm25: {fusion: [bm25]}
+dense: {fusion: [dense], dense_index: [flat, hnsw]}
+rrf: {fusion: [rrf], dense_index: [hnsw], rrf_k: [10, 30, 60, 100]}
+wrrf: {fusion: [wrrf], dense_index: [hnsw], rrf_k: [30, 60], alpha: [0.3, 0.5, 0.7]}
+weighted: {fusion: [weighted], dense_index: [hnsw], alpha: [0.3, 0.5, 0.6, 0.7, 0.8]}
+rrf_rerank: {fusion: [rrf], dense_index: [hnsw], rrf_k: [60], rerank_depth: [20, 30, 50, 100], rerank_blend: [0.0, 0.2]}
+weighted_rerank: {fusion: [weighted], dense_index: [hnsw], alpha: [0.5, 0.7], rerank_depth: [30, 50, 100], rerank_blend: [0.0]}

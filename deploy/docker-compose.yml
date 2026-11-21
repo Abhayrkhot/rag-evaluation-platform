@@ -1,0 +1,54 @@
+# Local / single-host deployment of the serving stack:
+#   vLLM primary (Qwen3-8B) + vLLM fallback (Qwen3-1.7B) + RAG agent API + Jaeger + Prometheus + Grafana
+# Indexes and corpus are built beforehand (`rageval data build`, `rageval index build`) into ../data and
+# ../artifacts. Usage: docker compose -f deploy/docker-compose.yml up -d
+x-vllm: &vllm
+  image: vllm/vllm-openai:v0.34.0
+  ipc: host
+  volumes: ["${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface"]
+  deploy:
+    resources:
+      reservations:
+        devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+  healthcheck:
+    test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/health"]
+    interval: 10s
+    timeout: 3s
+    retries: 60
+
+services:
+  vllm-primary:
+    <<: *vllm
+    command: ["--model", "${PRIMARY_MODEL:-Qwen/Qwen3-8B}", "--max-model-len", "8192", "--gpu-memory-utilization", "${PRIMARY_GPU_UTIL:-0.55}"]
+  vllm-fallback:
+    <<: *vllm
+    command: ["--model", "${FALLBACK_MODEL:-Qwen/Qwen3-1.7B}", "--max-model-len", "8192", "--gpu-memory-utilization", "${FALLBACK_GPU_UTIL:-0.25}"]
+  api:
+    build: {context: .., dockerfile: docker/api.Dockerfile}
+    environment:
+      RAG_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+    volumes:
+      - ../data:/app/data:ro
+      - ../artifacts:/app/artifacts:ro
+      - ../configs/serve/compose.yaml:/config/serve.yaml:ro
+      - ${HF_HOME:-~/.cache/huggingface}:/models
+      - ./logs:/app/logs
+    ports: ["8080:8080"]
+    depends_on:
+      vllm-primary: {condition: service_healthy}
+      vllm-fallback: {condition: service_healthy}
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    environment: {COLLECTOR_OTLP_ENABLED: "true"}
+    ports: ["16686:16686"]
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    volumes: ["./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment: {GF_AUTH_ANONYMOUS_ENABLED: "true", GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
