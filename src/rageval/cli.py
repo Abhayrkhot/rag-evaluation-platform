@@ -538,7 +538,7 @@ def gen_run(
         from rageval.judges.nli import ClassNLI
 
         prob = ClassNLI(models.verifier).prob
-    apply_verifier(records, retriever.corpus, prob)
+    apply_verifier(records, retriever.corpus, prob, client=client, params=params)
     wall = records[0].pop("_wall_seconds", None) if records else None
     write_jsonl(out, records)
     meta = run_meta(
@@ -651,56 +651,65 @@ def gen_choose(
     out: Annotated[Path, typer.Option()],
     tolerance: float = 0.02,
 ) -> None:
-    """Fix the test-suite settings from the dev report with explicit rules:
-    context_k   : the zero-shot K with the highest correctness; within `tolerance`, the higher
-                  citation precision
-    best_prompt : few_shot or cot if its unsupported-claim rate is lower than zero_shot's and its
-                  correctness is no more than `tolerance` below; otherwise zero_shot
-    verifier    : among the verification variants, the highest citation precision whose
-                  correctness is within `tolerance` of the same prompt without verification
+    """Fix the test-suite settings from the dev report (pipelines named
+    <prompt>_k<K>[_<policy>_t<tau*100>]) with explicit rules:
+      context_k   : the zero-shot K with the highest correctness; within `tolerance`, the higher
+                    citation precision
+      best_prompt : at that K, the strategy with the lowest unsupported-claim rate whose
+                    correctness is no more than `tolerance` below zero-shot's
+      verifier    : at that K, the verified variant with the highest citation precision whose
+                    correctness is within `tolerance` of the same prompt unverified
     """
+    import re
+
     S = read_json(dev_report)["summary"]
+    pat = re.compile(r"^(zero|few|cot)_k(\d+)(?:_(repair|prune|revise)_t(\d+))?$")
+    strat = {"zero": "zero_shot", "few": "few_shot", "cot": "cot"}
 
     def m(name: str, key: str) -> float:
         v = S[name].get(key)
         return float(v["mean"]) if isinstance(v, dict) else float("nan")
 
-    ks = {k: f"zero_k{k}" for k in (3, 5, 10) if f"zero_k{k}" in S}
-    best_c = max(m(n, "correct") for n in ks.values())
-    near = [k for k, n in ks.items() if m(n, "correct") >= best_c - tolerance]
-    k = max(near, key=lambda k: m(ks[k], "citation_precision"))
-    prompt, prompt_pipe = "zero_shot", "zero_k5"
-    for name, strat in (("few_k5", "few_shot"), ("cot_k5", "cot")):
-        if name not in S:
-            continue
-        better = m(name, "unsupported_rate") < m(prompt_pipe, "unsupported_rate")
-        ok = m(name, "correct") >= m("zero_k5", "correct") - tolerance
-        if better and ok:
-            prompt, prompt_pipe = strat, name
-    variants = [n for n in S if "_repair_" in n or "_prune_" in n]
-    ref = {"zero_shot": "zero_k5", "few_shot": "few_k5", "cot": "cot_k5"}
+    parsed = {n: pat.match(n) for n in S}
+    ks = sorted(
+        {int(x.group(2)) for x in parsed.values() if x and x.group(1) == "zero" and not x.group(3)}
+    )
+    best_c = max(m(f"zero_k{k}", "correct") for k in ks)
+    k = max(
+        (k for k in ks if m(f"zero_k{k}", "correct") >= best_c - tolerance),
+        key=lambda k: m(f"zero_k{k}", "citation_precision"),
+    )
+    base_c = m(f"zero_k{k}", "correct")
+    prompt = "zero"
+    for p in ("few", "cot"):
+        name = f"{p}_k{k}"
+        if (
+            name in S
+            and m(name, "unsupported_rate") < m(f"{prompt}_k{k}", "unsupported_rate")
+            and m(name, "correct") >= base_c - tolerance
+        ):
+            prompt = p
     best_v: tuple[float, str] | None = None
-    for n in variants:
-        strat = "few_shot" if n.startswith("few") else "cot" if n.startswith("cot") else "zero_shot"
-        if m(n, "correct") < m(ref[strat], "correct") - tolerance:
+    for n, x in parsed.items():
+        if not x or not x.group(3) or int(x.group(2)) != k:
             continue
-        cp = m(n, "citation_precision")
-        if best_v is None or cp > best_v[0]:
-            best_v = (cp, n)
-    policy, tau, vprompt = "none", 0.5, prompt
+        ref = f"{x.group(1)}_k{k}"
+        if ref in S and m(n, "correct") < m(ref, "correct") - tolerance:
+            continue
+        if best_v is None or m(n, "citation_precision") > best_v[0]:
+            best_v = (m(n, "citation_precision"), n)
+    policy, tau, vprompt = "none", 0.5, strat[prompt]
     if best_v is not None:
-        n = best_v[1]
-        policy = "prune" if "_prune_" in n else "repair"
-        tau = int(n.rsplit("_t", 1)[1]) / 100
-        vprompt = (
-            "few_shot" if n.startswith("few") else "cot" if n.startswith("cot") else "zero_shot"
-        )
+        x = pat.match(best_v[1])
+        assert x is not None
+        policy, tau, vprompt = x.group(3), int(x.group(4)) / 100, strat[x.group(1)]
     choice = {
         "context_k": k,
-        "best_prompt": prompt,
+        "best_prompt": strat[prompt],
         "verify_policy": policy,
         "verify_tau": tau,
         "verify_prompt": vprompt,
+        "verify_pipeline": best_v[1] if best_v else None,
         "tolerance": tolerance,
         "dev_evidence": {
             n: {

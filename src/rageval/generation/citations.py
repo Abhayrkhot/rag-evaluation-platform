@@ -9,7 +9,7 @@ CITE = re.compile(r"\[(\d+(?:\s*[,;]\s*\d+)*)\]")
 # citations written after the sentence terminator: "... in 1950. [1][2]" -> "... in 1950 [1][2]."
 TRAILING = re.compile(r"([.!?])((?:\s*\[\d+(?:\s*[,;]\s*\d+)*\])+)")
 ABBREV = re.compile(
-    r"\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Mt|Ft|Gen|Col|Lt|Sgt|Capt|Gov|Sen|Rep|Rev|Inc|Ltd|Co|Corp|No|vs|etc|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.",
+    r"\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Mt|Ft|Gen|Col|Lt|Sgt|Capt|Gov|Sen|Rep|Rev|Inc|Ltd|Co|Corp|No|Nos|Vol|Vols|vol|Ch|Pt|Fig|Ed|Op|vs|etc|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.",
 )
 INITIALS = re.compile(r"\b(?:[A-Z]\.){1,}(?=\s*[A-Z]?)")
 SPLIT = re.compile(r"(?<=[.!?])[\"')\]]*\s+(?=[\"'(]?[A-Z0-9])")

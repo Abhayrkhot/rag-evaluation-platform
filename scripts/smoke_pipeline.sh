@@ -39,6 +39,7 @@ pipelines:
   cot: {prompt: cot}
   zero_repair: {verify: repair}
   zero_prune: {verify: prune}
+  zero_revise: {verify: revise}
   zero_2hop: {retrieval: {hops: 2, plan_k: 3, hop2_keep: 2, hop2_take: 2}}
 YML
 uv run python scripts/fake_openai.py --port 18000 & srv=$!

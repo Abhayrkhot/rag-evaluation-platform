@@ -46,3 +46,20 @@ def test_unsupported_repair_keeps_prune_removes():
 def test_all_pruned_becomes_abstention():
     out, st = verify_answer(parse_answer("Gamma [1]."), DOCS, prob, policy="prune")
     assert out.abstained and st.became_abstention
+
+
+def test_completion_adds_missing_second_source():
+    # cites only [1] for a two-document fact: completion adds [2]
+    p = parse_answer("Alpha+Beta [1].")
+    out, st = verify_answer(p, DOCS, prob)
+    assert out.statements[0].citations == [1, 2] and st.recited == 1
+
+
+def test_prune_flagged_and_revise_keeps_first_pass():
+    from rageval.generation.verify import prune_flagged
+
+    p = parse_answer("Alpha [1]. Gamma [2].")
+    out, st = verify_answer(p, DOCS, prob, policy="revise")
+    assert len(out.claims) == 2  # revise keeps; the caller decides
+    pruned = prune_flagged(out, st)
+    assert [s.text for s in pruned.claims] == ["Alpha."]

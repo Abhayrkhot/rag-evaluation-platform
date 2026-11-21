@@ -16,7 +16,7 @@ class PipelineConfig(BaseModel):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     context_k: int = 10  # documents shown to the generator
     prompt: str = "zero_shot"  # naive | zero_shot | few_shot | cot
-    verify: str = "none"  # none | repair | prune
+    verify: str = "none"  # none | repair | prune | revise
     verify_tau: float = 0.5
     temperature: float = 0.0
     max_tokens: int | None = None

@@ -133,3 +133,26 @@ async def test_two_hop_plans_and_splices_second_hop():
     assert out["followup"] == "Tyler Bates"
     assert "plan" in out["timings"] and "retrieve2" in out["timings"]
     assert out["response"]["context"][1] == "d4"  # second-hop hit spliced after the first-hop head
+
+
+async def test_revise_policy_rewrites_flagged_sentences():
+    agent = make_agent(
+        "Paris is the capital of France [1]. Zzz is unsupported [2].", verify="revise"
+    )
+    # second call (the revision) returns a clean answer
+    texts = iter(
+        [
+            "Paris is the capital of France [1]. Zzz is unsupported [2].",
+            "Paris is the capital of France [1].",
+        ]
+    )
+
+    async def chat(messages, timeout=None, **kw):
+        from rageval.llm.client import ChatResult
+
+        return ChatResult(text=next(texts), model="primary")
+
+    agent.router.primary.chat = chat
+    out = await agent.answer("What is the capital of France?")
+    assert "revise" in out["timings"]
+    assert [s["text"] for s in out["response"]["statements"]] == ["Paris is the capital of France."]

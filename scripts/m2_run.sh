@@ -15,7 +15,7 @@ UTIL=${GEN_UTIL:-0.55}
 start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 8192 --gpu-memory-utilization "$UTIL" --seed 0
 LLM=(--llm-url http://127.0.0.1:8000 --llm-model Qwen/Qwen3-8B)
 
-if [ "$tag" = dev ]; then
+if [ "$tag" = dev ] && { [ ! -s "$M1/multihop_full.json" ] || [ "${MULTIHOP_RERUN:-0}" = 1 ]; }; then
   cli retrieval materialize --selected "$M1/selected.json" --models-template configs/models.yaml \
     --pipelines-template "$pipes_tmpl" --out-dir "$R/${tag}_cfg0" > /dev/null
   cli retrieval multihop --suite data/hotpot100k/dev.jsonl --models "$R/${tag}_cfg0/models.yaml" \

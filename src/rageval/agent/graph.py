@@ -1,7 +1,7 @@
 """The serving agent: a LangGraph state machine over the RAG pipeline.
 
     START -> retrieve -> (rerank | fuse_only) -> [plan -> retrieve2] -> generate
-          -> (verify | skip_verify) -> finalize -> END
+          -> (verify [-> revise] | skip_verify) -> finalize -> END
 
 retrieve   BM25 (thread pool) and dense search (micro-batched query embedding + FAISS) in
            parallel, fused with RRF or weighted fusion
@@ -11,6 +11,7 @@ plan       (two-hop) the LLM names the article still missing for a bridge questi
 retrieve2  (two-hop) hybrid + rerank for that query, spliced into the first-hop ranking
 generate   grounded, cited answer through the FallbackRouter (primary / fallback model)
 verify     NLI citation verification and repair (micro-batched)
+revise     (policy "revise") one rewrite of the flagged sentences, re-verified with pruning
 finalize   response assembly
 
 Every node runs inside an OpenTelemetry span and records its latency in the state's `timings`,
@@ -34,8 +35,8 @@ from pydantic import BaseModel, Field
 
 from rageval.corpus import Corpus
 from rageval.generation.citations import ParsedAnswer, parse_answer
-from rageval.generation.prompts import build_messages, max_tokens_for
-from rageval.generation.verify import averify_answer
+from rageval.generation.prompts import build_messages, max_tokens_for, revise_messages
+from rageval.generation.verify import averify_answer, prune_flagged
 from rageval.llm.router import FallbackRouter
 from rageval.retrieval.bm25 import BM25Index
 from rageval.retrieval.dense import DenseIndex, format_query
@@ -49,13 +50,14 @@ class AgentConfig(BaseModel):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     context_k: int = 5
     prompt: str = "zero_shot"
-    verify: str = "repair"  # none | repair | prune
+    verify: str = "repair"  # none | repair | prune | revise
     verify_tau: float = 0.5
     budget_ms: float | None = None  # per-request deadline; None = no deadline
     adaptive: bool = False  # skip rerank / verify when the deadline is close
     rerank_min_remaining_ms: float = 3000.0
     plan_min_remaining_ms: float = 3500.0  # second hop only when this much budget is left
     verify_min_remaining_ms: float = 400.0
+    revise_min_remaining_ms: float = 1500.0  # one revision round only with this much budget left
     verify_reserve_ms: float = 150.0  # budget held back from generation for verification
     gen_params: dict[str, Any] = Field(default_factory=dict)
 
@@ -77,6 +79,8 @@ class AgentState(TypedDict, total=False):
     prompt_tokens: int
     completion_tokens: int
     verify: dict[str, Any]
+    unsupported: list[str]
+    revise: dict[str, Any]
     timings: Annotated[dict[str, float], operator.or_]
     degraded: Annotated[list[str], operator.add]
     response: dict[str, Any]
@@ -231,14 +235,62 @@ class RAGAgent:
             "completion_tokens": rr.result.completion_tokens,
         }
 
+    def _docs(self, state: AgentState) -> list[tuple[str, str]]:
+        return [(self.corpus[d].title, self.corpus[d].text) for d in state["context"]]
+
     async def n_verify(self, state: AgentState) -> dict[str, Any]:
-        docs = [(self.corpus[d].title, self.corpus[d].text) for d in state["context"]]
         parsed, st = await averify_answer(
-            state["parsed"], docs, self._aprob, tau=self.cfg.verify_tau, policy=self.cfg.verify
+            state["parsed"],
+            self._docs(state),
+            self._aprob,
+            tau=self.cfg.verify_tau,
+            policy=self.cfg.verify,
+        )
+        bad = [d["text"] for d in st.detail if d.get("unsupported")]
+        upd: dict[str, Any] = {
+            "parsed": parsed,
+            "unsupported": bad,
+            "verify": {k: v for k, v in st.__dict__.items() if k != "detail"},
+        }
+        if self.cfg.verify == "revise" and bad and not self._can_revise(state):
+            # no budget for a revision round: drop what failed verification instead
+            upd["parsed"] = prune_flagged(parsed, st)
+            upd["degraded"] = ["revise"]
+            tm.DEGRADED_TOTAL.labels("revise").inc()
+        return upd
+
+    def _can_revise(self, state: AgentState) -> bool:
+        rem = self.remaining_ms(state)
+        return not (
+            self.cfg.adaptive and rem is not None and rem < self.cfg.revise_min_remaining_ms
+        )
+
+    async def n_revise(self, state: AgentState) -> dict[str, Any]:
+        docs = [self.corpus[d] for d in state["context"]]
+        msgs = revise_messages(
+            state["question"], docs, state["parsed"].answer, state.get("unsupported", [])
+        )
+        rr = await self.router.chat(
+            msgs,
+            remaining_ms=self.remaining_ms(state),
+            max_tokens=320,
+            temperature=0.0,
+            **self.cfg.gen_params,
+        )
+        tm.ROUTE_TOTAL.labels(f"revise:{rr.route}", rr.reason).inc()
+        parsed, st = await averify_answer(
+            parse_answer(rr.result.text),
+            self._docs(state),
+            self._aprob,
+            tau=self.cfg.verify_tau,
+            policy="prune",
         )
         return {
             "parsed": parsed,
-            "verify": {k: v for k, v in st.__dict__.items() if k != "detail"},
+            "revise": {
+                "route": rr.route,
+                **{k: v for k, v in st.__dict__.items() if k != "detail"},
+            },
         }
 
     async def n_skip_verify(self, state: AgentState) -> dict[str, Any]:
@@ -293,6 +345,11 @@ class RAGAgent:
     def e_after_plan(self, state: AgentState) -> str:
         return "retrieve2" if state.get("followup") else "generate"
 
+    def e_after_verify(self, state: AgentState) -> str:
+        if self.cfg.verify == "revise" and state.get("unsupported") and self._can_revise(state):
+            return "revise"
+        return "finalize"
+
     def e_after_generate(self, state: AgentState) -> str:
         if self.cfg.verify == "none" or self.verifier is None or state["parsed"].abstained:
             return "finalize"
@@ -312,6 +369,7 @@ class RAGAgent:
             ("generate", self.n_generate),
             ("verify", self.n_verify),
             ("skip_verify", self.n_skip_verify),
+            ("revise", self.n_revise),
             ("finalize", self.n_finalize),
         ]:
             g.add_node(name, cast(Any, self._traced(name, fn)))
@@ -324,7 +382,8 @@ class RAGAgent:
         g.add_conditional_edges(
             "generate", self.e_after_generate, ["verify", "skip_verify", "finalize"]
         )
-        g.add_edge("verify", "finalize")
+        g.add_conditional_edges("verify", self.e_after_verify, ["revise", "finalize"])
+        g.add_edge("revise", "finalize")
         g.add_edge("skip_verify", "finalize")
         g.add_edge("finalize", END)
         return g.compile()

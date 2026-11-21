@@ -155,8 +155,17 @@ async def generate(
     return records
 
 
-def apply_verifier(records: list[dict[str, Any]], corpus: Corpus, prob: Any) -> None:
-    """Verify every record whose pipeline asks for it, batching NLI calls across answers."""
+def apply_verifier(
+    records: list[dict[str, Any]],
+    corpus: Corpus,
+    prob: Any,
+    client: ChatClient | None = None,
+    params: dict[str, Any] | None = None,
+) -> None:
+    """Verify every record whose pipeline asks for it, batching NLI calls across answers.
+    Policy "revise" sends flagged sentences back to the generator once (needs `client`) and
+    verifies the rewrite with "prune"."""
+    from rageval.generation.prompts import revise_messages
     from rageval.serve.batcher import MicroBatcher
 
     batcher = None
@@ -172,6 +181,8 @@ def apply_verifier(records: list[dict[str, Any]], corpus: Corpus, prob: Any) -> 
         assert batcher is not None
         return await batcher.submit(list(zip(ps, hs, strict=True)))
 
+    reviser = ChatClient(client.base_url, client.model, timeout=client.timeout) if client else None
+
     async def one(rec: dict[str, Any]) -> None:
         cfg = PipelineConfig.model_validate(rec["config"])
         parsed = rec.pop("_parsed")
@@ -182,6 +193,29 @@ def apply_verifier(records: list[dict[str, Any]], corpus: Corpus, prob: Any) -> 
                 parsed, docs, aprob, tau=cfg.verify_tau, policy=cfg.verify
             )
             rec["verify"] = {**st.__dict__, "ms": (time.perf_counter() - t0) * 1e3}
+            bad = [d["text"] for d in st.detail if d.get("unsupported")]
+            if cfg.verify == "revise" and bad:
+                assert reviser is not None, "policy revise needs the generator client"
+                msgs = revise_messages(
+                    rec["question"], [corpus[d] for d in rec["context"]], parsed.answer, bad
+                )
+                try:
+                    r2 = await reviser.chat(msgs, max_tokens=320, temperature=0.0, **(params or {}))
+                    revised = parse_answer(r2.text)
+                    parsed, st2 = await averify_answer(
+                        revised, docs, aprob, tau=cfg.verify_tau, policy="prune"
+                    )
+                    rec["revise"] = {
+                        "unsupported_before": bad,
+                        "raw": r2.text,
+                        "completion_tokens": r2.completion_tokens,
+                        "verify2": {k: v for k, v in st2.__dict__.items() if k != "detail"},
+                    }
+                except Exception as e:  # keep the repaired first-pass answer, but prune what failed
+                    rec["revise"] = {"error": str(e)[:200]}
+                    parsed, _ = await averify_answer(
+                        parsed, docs, aprob, tau=cfg.verify_tau, policy="prune"
+                    )
         rec["final"] = _parsed_dict(parsed)
 
     async def all_() -> None:

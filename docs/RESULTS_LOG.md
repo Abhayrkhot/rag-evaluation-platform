@@ -18,3 +18,11 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   CPU-bound by single-threaded tokenization; fixed by one parallel tokenizer call per request batch.
 - **Infrastructure.** The `gpu` QOS allows one GPU per job and four per user; `gpu-short` two per job.
   M2 runs as single-GPU sequential jobs; M4 uses a two-GPU `gpu-short` job.
+- **M2 dev iteration 1** (rules v1; archived in `results/explorer/m2/dev_iter1`). TRUE-judged citation
+  precision was 52-75% across pipelines (naive baseline 57%). Reading the failures: two-hop
+  sentences cited one of their two sources, about 11% of sentences carried no citation, and the
+  sentence splitter broke "Vol. 2" titles. Pruning unsupported sentences raised precision but cut
+  correctness from 82% to 70% (answers emptied into abstentions).
+  Iteration 2: rules v2 (one fact per sentence, cite every source, no pronouns), citation repair
+  that first completes a citation with the missing second source and minimises the result, and a
+  `revise` policy that sends flagged sentences back to the generator once and prunes what still fails.
