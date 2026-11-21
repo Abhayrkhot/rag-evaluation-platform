@@ -310,6 +310,9 @@ def ret_materialize(
     multihop: Annotated[
         Path | None, typer.Option(help="dev multihop grid; adds the best splice")
     ] = None,
+    choices: Annotated[
+        Path | None, typer.Option(help="dev choices (gen choose) for test templates")
+    ] = None,
 ) -> None:
     """Fill the dev-selected embedder, reranker and retrieval config into config templates
     (__EMBEDDER__, __RERANKER__, __RETRIEVAL__), and keep the filled copies with the results."""
@@ -343,9 +346,18 @@ def ret_materialize(
     )
     m = m.replace("dense_index: hnsw", f"dense_index: {sel['config'].get('dense_index', 'hnsw')}")
     (out_dir / "models.yaml").write_text(m)
-    (out_dir / "pipelines.yaml").write_text(
-        pipelines_template.read_text().replace("__RETRIEVAL__", retrieval)
-    )
+    ptxt = pipelines_template.read_text().replace("__RETRIEVAL__", retrieval)
+    if choices is not None:
+        ch = read_json(choices)
+        for key, val in (
+            ("__K__", ch["context_k"]),
+            ("__BEST__", ch["best_prompt"]),
+            ("__VPROMPT__", ch["verify_prompt"]),
+            ("__POLICY__", ch["verify_policy"]),
+            ("__TAU__", ch["verify_tau"]),
+        ):
+            ptxt = ptxt.replace(key, str(val))
+    (out_dir / "pipelines.yaml").write_text(ptxt)
     _echo({"embedder": embedder, "reranker": sel["reranker"], "retrieval": cfg})
 
 
@@ -631,6 +643,80 @@ def gen_merge(
     rows = merge(recs, n, j)
     write_jsonl(out, rows)
     _echo({"out": str(out), "rows": len(rows)})
+
+
+@gen_app.command("choose")
+def gen_choose(
+    dev_report: Annotated[Path, typer.Option()],
+    out: Annotated[Path, typer.Option()],
+    tolerance: float = 0.02,
+) -> None:
+    """Fix the test-suite settings from the dev report with explicit rules:
+    context_k   : the zero-shot K with the highest correctness; within `tolerance`, the higher
+                  citation precision
+    best_prompt : few_shot or cot if its unsupported-claim rate is lower than zero_shot's and its
+                  correctness is no more than `tolerance` below; otherwise zero_shot
+    verifier    : among the verification variants, the highest citation precision whose
+                  correctness is within `tolerance` of the same prompt without verification
+    """
+    S = read_json(dev_report)["summary"]
+
+    def m(name: str, key: str) -> float:
+        v = S[name].get(key)
+        return float(v["mean"]) if isinstance(v, dict) else float("nan")
+
+    ks = {k: f"zero_k{k}" for k in (3, 5, 10) if f"zero_k{k}" in S}
+    best_c = max(m(n, "correct") for n in ks.values())
+    near = [k for k, n in ks.items() if m(n, "correct") >= best_c - tolerance]
+    k = max(near, key=lambda k: m(ks[k], "citation_precision"))
+    prompt, prompt_pipe = "zero_shot", "zero_k5"
+    for name, strat in (("few_k5", "few_shot"), ("cot_k5", "cot")):
+        if name not in S:
+            continue
+        better = m(name, "unsupported_rate") < m(prompt_pipe, "unsupported_rate")
+        ok = m(name, "correct") >= m("zero_k5", "correct") - tolerance
+        if better and ok:
+            prompt, prompt_pipe = strat, name
+    variants = [n for n in S if "_repair_" in n or "_prune_" in n]
+    ref = {"zero_shot": "zero_k5", "few_shot": "few_k5", "cot": "cot_k5"}
+    best_v: tuple[float, str] | None = None
+    for n in variants:
+        strat = "few_shot" if n.startswith("few") else "cot" if n.startswith("cot") else "zero_shot"
+        if m(n, "correct") < m(ref[strat], "correct") - tolerance:
+            continue
+        cp = m(n, "citation_precision")
+        if best_v is None or cp > best_v[0]:
+            best_v = (cp, n)
+    policy, tau, vprompt = "none", 0.5, prompt
+    if best_v is not None:
+        n = best_v[1]
+        policy = "prune" if "_prune_" in n else "repair"
+        tau = int(n.rsplit("_t", 1)[1]) / 100
+        vprompt = (
+            "few_shot" if n.startswith("few") else "cot" if n.startswith("cot") else "zero_shot"
+        )
+    choice = {
+        "context_k": k,
+        "best_prompt": prompt,
+        "verify_policy": policy,
+        "verify_tau": tau,
+        "verify_prompt": vprompt,
+        "tolerance": tolerance,
+        "dev_evidence": {
+            n: {
+                key: m(n, key)
+                for key in (
+                    "correct",
+                    "citation_precision",
+                    "unsupported_rate",
+                    "abstain_unanswerable",
+                )
+            }
+            for n in S
+        },
+    }
+    write_json(out, choice)
+    _echo({k2: v for k2, v in choice.items() if k2 != "dev_evidence"})
 
 
 @gen_app.command("report")

@@ -1,0 +1,18 @@
+# M2/M3 on the 500-question test suite. Every setting below was fixed on dev:
+#   __RETRIEVAL__  hybrid+rerank (results/m1/selected.json) + two-hop splice (results/m1/multihop_dev.json)
+#   __K__, __BEST__, __POLICY__, __TAU__, __VPROMPT__  from results/m2/test_choices.json (gen choose)
+base:
+  retrieval: __RETRIEVAL__
+  context_k: __K__
+  prompt: zero_shot
+  verify: none
+pipelines:
+  # citation-precision stages (S3 is the dev-picked prompt among the three below)
+  s0_baseline: {retrieval: {hops: 1, rerank: false}, context_k: 10, prompt: naive}
+  s1a_rerank: {retrieval: {hops: 1}, prompt: naive}
+  s1b_2hop: {prompt: naive}
+  s4_verified: {prompt: __VPROMPT__, verify: __POLICY__, verify_tau: __TAU__}
+  # prompt strategies (M3): identical contexts, paired comparisons
+  zero_shot: {}
+  few_shot: {prompt: few_shot}
+  cot: {prompt: cot}
