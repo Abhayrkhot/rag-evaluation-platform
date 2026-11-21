@@ -25,7 +25,10 @@ def chat(body: dict) -> dict:
     msgs = body["messages"]
     system = msgs[0]["content"] if msgs[0]["role"] == "system" else ""
     user = msgs[-1]["content"]
-    if "Statements:" in user:
+    if "plan searches" in system:
+        titles = re.findall(r"\[\d+\] Title: (.*)", user)
+        text = titles[-1] if titles else "NONE"
+    elif "Statements:" in user:
         n = len(re.findall(r"(?m)^\d+: ", user.split("Statements:")[-1]))
         text = "\n".join(f"{i}: {'SUPPORTED' if i % 2 else 'UNSUPPORTED'}" for i in range(1, n + 1))
     elif "Reference answer:" in user:

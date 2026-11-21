@@ -1,0 +1,35 @@
+{
+  "n_docs": 100000,
+  "bm25": {
+    "bm25_build_seconds": 6.06,
+    "k1": 0.9,
+    "b": 0.4
+  },
+  "qwen3-embedding-0.6b": {
+    "embedder": "Qwen/Qwen3-Embedding-0.6B",
+    "n_docs": 100000,
+    "dim": 1024,
+    "embed_seconds": 152.62,
+    "docs_per_second": 655.2,
+    "hnsw_build_seconds": 13.359,
+    "hnsw_m": 32
+  },
+  "bge-base-en-v1.5": {
+    "embedder": "BAAI/bge-base-en-v1.5",
+    "n_docs": 100000,
+    "dim": 768,
+    "embed_seconds": 51.87,
+    "docs_per_second": 1927.7,
+    "hnsw_build_seconds": 8.685,
+    "hnsw_m": 32
+  },
+  "bge-large-en-v1.5": {
+    "embedder": "BAAI/bge-large-en-v1.5",
+    "n_docs": 100000,
+    "dim": 1024,
+    "embed_seconds": 64.92,
+    "docs_per_second": 1540.4,
+    "hnsw_build_seconds": 11.566,
+    "hnsw_m": 32
+  }
+}

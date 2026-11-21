@@ -1,0 +1,10 @@
+{
+  "out": "artifacts/cands/dev__qwen3-embedding-0.6b.jsonl",
+  "n": 250,
+  "timing": {
+    "bm25_ms_per_q_batched": 4.3167852610349655,
+    "embed_ms_per_q_batched": 6.207143008708954,
+    "flat_ms_per_q_batched": 0.9334978014230728,
+    "hnsw_ms_per_q_batched": 0.3054241016507149
+  }
+}

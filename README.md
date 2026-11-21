@@ -21,7 +21,18 @@ _Pending: results not generated yet._
 ## Retrieval: hybrid FAISS + BM25 + reranking over 100K documents
 
 <!-- BEGIN:retrieval -->
-_Pending: results not generated yet._
+Embedder `bge-large-en-v1.5`, reranker `bge-reranker-v2-m3`, selected on dev (dev Recall@10 92.5%) with config `{"alpha": 0.7, "dense_index": "hnsw", "fusion": "weighted", "rerank_blend": 0.0, "rerank_depth": 100}`.
+
+| Pipeline | Test Recall@10 [95% CI] | Test both-hops@10 | Test nDCG@10 | Full Recall@10 [95% CI] | Full both-hops@10 |
+|---|---|---|---|---|---|
+| bm25 | 75.2% [72.5, 78.0] | 53.2% | 0.701 | 76.6% [75.9, 77.2] | 55.9% |
+| dense | 87.8% [85.5, 89.9] | 76.8% | 0.826 | 86.7% [86.1, 87.3] | 75.2% |
+| hybrid | 89.5% [87.5, 91.5] | 79.2% | 0.851 | 88.6% [88.1, 89.1] | 78.4% |
+| hybrid+rerank | 90.9% [89.0, 92.8] | 82.0% | 0.891 | 92.0% [91.6, 92.5] | 84.3% |
+
+Test: 400 answerable questions. Full: 7018 answerable questions. HNSW vs exact search top-10 overlap: 99.6%.
+
+Index build: Qwen3-Embedding-0.6B 655 docs/s; bge-base-en-v1.5 1928 docs/s; bge-large-en-v1.5 1540 docs/s; BM25 6 s.
 <!-- END:retrieval -->
 
 ## Grounding: citation precision, stage by stage

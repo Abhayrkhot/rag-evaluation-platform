@@ -39,10 +39,16 @@ pipelines:
   cot: {prompt: cot}
   zero_repair: {verify: repair}
   zero_prune: {verify: prune}
+  zero_2hop: {retrieval: {hops: 2, plan_k: 3, hop2_keep: 2, hop2_take: 2}}
 YML
 uv run python scripts/fake_openai.py --port 18000 & srv=$!
 trap 'kill $srv' EXIT
 until curl -sf http://127.0.0.1:18000/health > /dev/null; do sleep 1; done
+cli retrieval multihop --suite $S/dev.jsonl --models $S/models.yaml --selected $S/selected.json --llm-url http://127.0.0.1:18000 \
+  --llm-model fake/planner --candidates $S/cands/dev__bge-small-en-v1.5.jsonl --rerank-cache-dir $S/rerank \
+  --plan-k 3 --keep 2 --keep 3 --take 1 --take 2 --out $S/multihop.json
+cli retrieval materialize --selected $S/selected.json --models-template $S/models.yaml --pipelines-template $S/pipes.yaml \
+  --out-dir $S/cfg --multihop $S/multihop.json
 cli gen run --suite $S/dev.jsonl --pipelines $S/pipes.yaml --models $S/models.yaml --out $S/gen.jsonl
 cli gen judge-nli --records $S/gen.jsonl --corpus $S/corpus.jsonl --out $S/nli.json --kind class --model cross-encoder/nli-deberta-v3-xsmall
 cli gen judge-llm --records $S/gen.jsonl --corpus $S/corpus.jsonl --out $S/llm.json --llm-url http://127.0.0.1:18000 --llm-model fake/judge

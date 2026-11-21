@@ -1,0 +1,10 @@
+{
+  "out": "artifacts/cands/test__bge-large-en-v1.5.jsonl",
+  "n": 500,
+  "timing": {
+    "bm25_ms_per_q_batched": 2.7961182557046413,
+    "embed_ms_per_q_batched": 2.93381454795599,
+    "flat_ms_per_q_batched": 0.823780607432127,
+    "hnsw_ms_per_q_batched": 0.6452736407518387
+  }
+}

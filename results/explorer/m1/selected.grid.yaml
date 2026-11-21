@@ -1,0 +1,15 @@
+- family: bm25
+  fusion: bm25
+- dense_index: hnsw
+  family: dense
+  fusion: dense
+- alpha: 0.7
+  dense_index: hnsw
+  family: hybrid
+  fusion: weighted
+- alpha: 0.7
+  dense_index: hnsw
+  family: hybrid+rerank
+  fusion: weighted
+  rerank_blend: 0.0
+  rerank_depth: 100

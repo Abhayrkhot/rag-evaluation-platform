@@ -20,7 +20,7 @@ from rageval.io import stable_hash
 from rageval.llm.client import ChatClient, ChatResult, gather_limited
 from rageval.pipeline import PipelineConfig
 from rageval.retrieval.hybrid import HybridRetriever, RetrievalResult
-from rageval.types import Question
+from rageval.types import Hit, Question
 
 
 def retrieve_all(
@@ -28,29 +28,64 @@ def retrieve_all(
     questions: Sequence[Question],
     cfgs: Sequence[PipelineConfig],
     batch: int = 64,
+    client: ChatClient | None = None,
+    params: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, RetrievalResult]]:
-    """{retrieval-config hash: {qid: result}} for every distinct retrieval config."""
+    """{retrieval-config hash: {qid: result}} for every distinct retrieval config. Two-hop
+    configs reuse the matching single-hop ranking as their first hop."""
+    from rageval.retrieval.multihop import merge_hops, second_hop
+
     out: dict[str, dict[str, RetrievalResult]] = {}
-    for cfg in cfgs:
-        rc = cfg.retrieval.model_copy(update={"final_k": max(cfg.context_k, cfg.retrieval.final_k)})
-        key = stable_hash(rc.model_dump())
+    for cfg in sorted(cfgs, key=lambda c: c.retrieval.hops):
+        key = retrieval_key(cfg)
         if key in out:
             continue
-        res: dict[str, RetrievalResult] = {}
-        for i in range(0, len(questions), batch):
-            chunk = questions[i : i + batch]
-            for q, r in zip(
-                chunk,
-                retriever.retrieve_batch([q.question for q in chunk], **rc.model_dump()),
-                strict=True,
-            ):
-                res[q.qid] = r
-        out[key] = res
+        rc = cfg.retrieval.model_copy(update={"final_k": 100})
+        one = rc.model_copy(update={"hops": 1})
+        one_key = stable_hash(one.model_dump())
+        if one_key not in out:
+            res: dict[str, RetrievalResult] = {}
+            for i in range(0, len(questions), batch):
+                chunk = questions[i : i + batch]
+                for q, r in zip(
+                    chunk,
+                    retriever.retrieve_batch([q.question for q in chunk], **one.model_dump()),
+                    strict=True,
+                ):
+                    res[q.qid] = r
+            out[one_key] = res
+        if rc.hops == 1:
+            continue
+        assert client is not None, "two-hop retrieval needs the planner LLM"
+        first = out[one_key]
+        # a fresh client: httpx connection pools are bound to the event loop that created them
+        planner = ChatClient(client.base_url, client.model, timeout=client.timeout)
+        mh = asyncio.run(
+            second_hop(
+                retriever,
+                planner,
+                [q.question for q in questions],
+                [first[q.qid].doc_ids for q in questions],
+                one,
+                rc.plan_k,
+                rc.hop2_depth,
+                128,
+                params,
+            )
+        )
+        two: dict[str, RetrievalResult] = {}
+        for q, m in zip(questions, mh, strict=True):
+            merged = merge_hops(m.hop1, m.hop2, rc.hop2_keep, rc.hop2_take) if m.hop2 else m.hop1
+            r = RetrievalResult(q.question, [Hit(d, 0.0, "multihop") for d in merged])
+            r.timings_ms = {"planner": m.planner_ms}
+            r.followup = m.followup  # type: ignore[attr-defined]
+            two[q.qid] = r
+        out[key] = two
     return out
 
 
 def retrieval_key(cfg: PipelineConfig) -> str:
-    rc = cfg.retrieval.model_copy(update={"final_k": max(cfg.context_k, cfg.retrieval.final_k)})
+    rc = cfg.retrieval.model_copy(update={"final_k": 100})
     return stable_hash(rc.model_dump())
 
 
@@ -96,6 +131,7 @@ async def generate(
             "gold_doc_ids": q.gold_doc_ids,
             "context": ctx,
             "context_recall": recall_at_k(ctx, q.gold_doc_ids, len(ctx)) if q.answerable else None,
+            "followup": getattr(retrieved[retrieval_key(cfg)][q.qid], "followup", None),
         }
         if isinstance(r, ChatResult):
             parsed = parse_answer(r.text)

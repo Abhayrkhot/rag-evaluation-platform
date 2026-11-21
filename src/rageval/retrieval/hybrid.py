@@ -29,6 +29,12 @@ class RetrievalConfig(BaseModel):
     ef_search: int = 128
     # Final score = reranker score, optionally blended with fused rank (0 = pure reranker).
     rerank_blend: float = 0.0
+    # Two-hop retrieval (rageval.retrieval.multihop): 1 = single shot.
+    hops: int = 1
+    plan_k: int = 5
+    hop2_depth: int = 30
+    hop2_keep: int = 3
+    hop2_take: int = 3
 
 
 @dataclass

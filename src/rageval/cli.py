@@ -307,6 +307,9 @@ def ret_materialize(
     pipelines_template: Annotated[Path, typer.Option()],
     out_dir: Annotated[Path, typer.Option()],
     ef_search: int = 256,
+    multihop: Annotated[
+        Path | None, typer.Option(help="dev multihop grid; adds the best splice")
+    ] = None,
 ) -> None:
     """Fill the dev-selected embedder, reranker and retrieval config into config templates
     (__EMBEDDER__, __RERANKER__, __RETRIEVAL__), and keep the filled copies with the results."""
@@ -319,6 +322,18 @@ def ret_materialize(
     cfg = {k: v for k, v in sel["config"].items() if k not in ("family", "dense_index")}
     cfg["rerank"] = int(cfg.get("rerank_depth", 0) or 0) > 0
     cfg["ef_search"] = ef_search
+    if multihop is not None:
+        mh = read_json(multihop)
+        b = mh["best"]
+        gain = b["recall@10"]["mean"] - mh["baseline_hop1"]["recall@10"]["mean"]
+        if gain > 0:
+            cfg.update(
+                hops=2,
+                plan_k=b["plan_k"],
+                hop2_keep=b["keep"],
+                hop2_take=b["take"],
+                hop2_depth=mh["meta"]["hop2_depth"],
+            )
     retrieval = json.dumps(cfg, sort_keys=True)
     out_dir.mkdir(parents=True, exist_ok=True)
     m = (
@@ -332,6 +347,137 @@ def ret_materialize(
         pipelines_template.read_text().replace("__RETRIEVAL__", retrieval)
     )
     _echo({"embedder": embedder, "reranker": sel["reranker"], "retrieval": cfg})
+
+
+@ret_app.command("multihop")
+def ret_multihop(
+    suite: Annotated[Path, typer.Option()],
+    models_cfg: Annotated[Path, typer.Option("--models")],
+    selected: Annotated[Path, typer.Option()],
+    llm_url: Annotated[str, typer.Option()],
+    out: Annotated[Path, typer.Option()],
+    llm_model: str = "Qwen/Qwen3-8B",
+    plan_k: Annotated[list[int] | None, typer.Option()] = None,
+    keep: Annotated[list[int] | None, typer.Option()] = None,
+    take: Annotated[list[int] | None, typer.Option()] = None,
+    hop2_depth: int = 30,
+    candidates: Annotated[Path | None, typer.Option(help="cached first-hop candidates")] = None,
+    rerank_cache_dir: Annotated[Path, typer.Option()] = Path("artifacts/rerank"),
+    rows_out: Annotated[Path | None, typer.Option()] = None,
+) -> None:
+    """Two-hop retrieval: first hop = the selected single-hop ranking (from the M1 caches when
+    given), planner LLM names the missing article, second hybrid+rerank hop, splice grid."""
+    import asyncio
+
+    from rageval.corpus import load_suite
+    from rageval.eval.retrieval_metrics import per_question
+    from rageval.eval.stats import bootstrap_ci
+    from rageval.llm.client import QWEN3_NO_THINK, ChatClient
+    from rageval.pipeline import ModelsConfig, load_retriever
+    from rageval.retrieval.experiments import RerankCache, load_candidates, rank_one, slug
+    from rageval.retrieval.hybrid import RetrievalConfig
+    from rageval.retrieval.multihop import merge_hops, second_hop
+
+    models = ModelsConfig.model_validate(yaml.safe_load(models_cfg.read_text()))
+    sel = read_json(selected)["selected"]
+    scfg = {k: v for k, v in sel["config"].items() if k != "family"}
+    rcfg = RetrievalConfig.model_validate(
+        {k: v for k, v in scfg.items() if k != "dense_index"}
+        | {"rerank": int(scfg.get("rerank_depth", 0) or 0) > 0, "ef_search": 256}
+    )
+    qs = load_suite(suite)
+    retriever = load_retriever(models, rcfg)
+    if candidates is not None:
+        cands = load_candidates(candidates)
+        rr = None
+        if rcfg.rerank:
+            rr = RerankCache(
+                rerank_cache_dir
+                / f"{suite.stem}__{candidates.stem.split('__')[-1]}__{slug(models.reranker or '')}.jsonl"
+            ).scores
+        hop1 = [rank_one(cands[q.qid], scfg, rr, q.qid, final_k=100) for q in qs]
+    else:
+        hop1 = []
+        for s in range(0, len(qs), 256):
+            hop1 += [
+                r.doc_ids
+                for r in retriever.retrieve_batch(
+                    [q.question for q in qs[s : s + 256]], final_k=100
+                )
+            ]
+    params = QWEN3_NO_THINK if "qwen3" in llm_model.lower() else {}
+    ans = [i for i, q in enumerate(qs) if q.answerable]
+
+    def score(lists: list[list[str]]) -> dict[str, Any]:
+        rows = [per_question(lists[i], qs[i].gold_doc_ids, ks=(5, 10)) for i in ans]
+        outd: dict[str, Any] = {
+            k: bootstrap_ci([r[k] for r in rows]).to_dict()
+            for k in ("recall@10", "all_recall@10", "recall@5", "ndcg@10")
+        }
+        for t in ("bridge", "comparison"):
+            sub = [r["recall@10"] for i, r in zip(ans, rows, strict=True) if qs[i].qtype == t]
+            if sub:
+                outd[f"recall@10/{t}"] = bootstrap_ci(sub).to_dict()
+        return outd
+
+    result: dict[str, Any] = {"baseline_hop1": score(hop1), "grid": []}
+    best: tuple[float, dict[str, Any], list[Any]] | None = None
+    for pk in plan_k or [5]:
+        client = ChatClient(llm_url, llm_model, timeout=300)  # one per event loop
+        mh = asyncio.run(
+            second_hop(
+                retriever, client, [q.question for q in qs], hop1, rcfg, pk, hop2_depth, 128, params
+            )
+        )
+        fu_rate = sum(1 for m in mh if m.followup) / len(mh)
+        for kp in keep or [3]:
+            for tk in take or [3]:
+                merged = [merge_hops(m.hop1, m.hop2, kp, tk) if m.hop2 else m.hop1 for m in mh]
+                sc = score(merged)
+                entry = {"plan_k": pk, "keep": kp, "take": tk, "followup_rate": fu_rate, **sc}
+                result["grid"].append(entry)
+                key = sc["recall@10"]["mean"]
+                if best is None or key > best[0]:
+                    best = (
+                        key,
+                        entry,
+                        [
+                            (qs[i].qid, m.followup, m.hop1[:10], m.hop2[:5], merged[i][:10])
+                            for i, m in enumerate(mh)
+                        ],
+                    )
+        result.setdefault("planner", []).append(
+            {
+                "plan_k": pk,
+                "followup_rate": fu_rate,
+                "planner_ms_mean": sum(m.planner_ms for m in mh) / len(mh),
+                "examples": [(m.question, m.followup) for m in mh[:12]],
+            }
+        )
+    assert best is not None
+    result["best"] = best[1]
+    result["meta"] = run_meta(
+        suite=str(suite),
+        selected=sel,
+        llm=llm_model,
+        hop2_depth=hop2_depth,
+        hop1_from_cache=candidates is not None,
+    )
+    write_json(out, result)
+    if rows_out:
+        write_jsonl(
+            rows_out,
+            (
+                {"qid": a, "followup": b, "hop1": c, "hop2": d, "merged": e}
+                for a, b, c, d, e in best[2]
+            ),
+        )
+    _echo(
+        {
+            "baseline_recall@10": result["baseline_hop1"]["recall@10"],
+            "best": {k: (v["mean"] if isinstance(v, dict) else v) for k, v in best[1].items()},
+        }
+    )
 
 
 # ---------------------------------------------------------------- generation / judging
@@ -369,9 +515,9 @@ def gen_run(
         cfgs = [c for c in cfgs if c.name in only]
     qs = load_suite(suite)[:limit] if limit else load_suite(suite)
     retriever = load_retriever(models)
-    retrieved = retrieve_all(retriever, qs, cfgs)
     params = QWEN3_NO_THINK if "qwen3" in models.generator.lower() else {}
     client = ChatClient(models.generator_url, models.generator)
+    retrieved = retrieve_all(retriever, qs, cfgs, client=client, params=params)
     records = asyncio.run(
         generate(qs, retriever.corpus, retrieved, cfgs, client, concurrency, params)
     )
