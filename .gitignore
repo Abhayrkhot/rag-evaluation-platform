@@ -11,3 +11,5 @@ __pycache__/
 /results/**/*.tmp
 .env
 .explorer.env
+/results/**/spans*.jsonl
+/results/**/warm.jsonl

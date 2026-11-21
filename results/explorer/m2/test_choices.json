@@ -4,116 +4,103 @@
   "dev_evidence": {
     "cot_k10": {
       "abstain_unanswerable": 0.66,
-      "citation_precision": 0.7580352303523036,
-      "correct": 0.85,
-      "unsupported_rate": 0.14868804664723032
+      "citation_precision": 0.764539295392954,
+      "correct": 0.855,
+      "unsupported_rate": 0.15476190476190477
     },
-    "cot_k10_revise_t50": {
-      "abstain_unanswerable": 0.68,
-      "citation_precision": 0.7847359735973598,
-      "correct": 0.845,
-      "unsupported_rate": 0.11676646706586827
-    },
-    "cot_k5": {
-      "abstain_unanswerable": 0.76,
-      "citation_precision": 0.7581597222222222,
-      "correct": 0.835,
-      "unsupported_rate": 0.15644171779141106
-    },
-    "cot_k5_revise_t50": {
-      "abstain_unanswerable": 0.76,
-      "citation_precision": 0.7783854166666666,
-      "correct": 0.835,
-      "unsupported_rate": 0.10365853658536585
+    "cot_k10_revens_t90": {
+      "abstain_unanswerable": 0.7,
+      "citation_precision": 0.9204936424831714,
+      "correct": 0.755,
+      "unsupported_rate": 0.03614457831325301
     },
     "few_k10": {
       "abstain_unanswerable": 0.26,
-      "citation_precision": 0.7197033898305085,
+      "citation_precision": 0.7253531073446328,
       "correct": 0.855,
-      "unsupported_rate": 0.22056384742951907
+      "unsupported_rate": 0.20578231292517007
     },
-    "few_k10_revise_t50": {
-      "abstain_unanswerable": 0.48,
-      "citation_precision": 0.8350446428571429,
-      "correct": 0.85,
-      "unsupported_rate": 0.12318840579710146
+    "few_k10_revens_t70": {
+      "abstain_unanswerable": 0.58,
+      "citation_precision": 0.8971033574720211,
+      "correct": 0.82,
+      "unsupported_rate": 0.0718562874251497
     },
-    "few_k5": {
-      "abstain_unanswerable": 0.26,
-      "citation_precision": 0.7056737588652482,
-      "correct": 0.835,
-      "unsupported_rate": 0.22628951747088186
+    "few_k10_revens_t90": {
+      "abstain_unanswerable": 0.62,
+      "citation_precision": 0.9473619494746256,
+      "correct": 0.765,
+      "unsupported_rate": 0.03777777777777778
     },
-    "few_k5_revise_t50": {
+    "few_k10_revise_t90": {
       "abstain_unanswerable": 0.52,
-      "citation_precision": 0.8464898989898989,
-      "correct": 0.835,
-      "unsupported_rate": 0.14389799635701275
+      "citation_precision": 0.8720211161387631,
+      "correct": 0.855,
+      "unsupported_rate": 0.09523809523809523
     },
     "s0_naive_fused_k10": {
       "abstain_unanswerable": 0.04,
-      "citation_precision": 0.5745631720430108,
-      "correct": 0.765,
-      "unsupported_rate": 0.33186490455212925
+      "citation_precision": 0.5705309139784946,
+      "correct": 0.77,
+      "unsupported_rate": 0.32761310452418096
     },
     "s1_naive_2hop_k10": {
       "abstain_unanswerable": 0.02,
-      "citation_precision": 0.5670395869191049,
+      "citation_precision": 0.5569994262765346,
       "correct": 0.83,
-      "unsupported_rate": 0.29393939393939394
+      "unsupported_rate": 0.2984126984126984
     },
     "s1_naive_rerank_k10": {
       "abstain_unanswerable": 0.0,
-      "citation_precision": 0.5738190476190476,
+      "citation_precision": 0.5718190476190476,
       "correct": 0.785,
-      "unsupported_rate": 0.3456973293768546
+      "unsupported_rate": 0.34477379095163807
     },
     "zero_k10": {
-      "abstain_unanswerable": 0.38,
-      "citation_precision": 0.7330447330447329,
+      "abstain_unanswerable": 0.4,
+      "citation_precision": 0.7405797101449274,
       "correct": 0.84,
-      "unsupported_rate": 0.18936170212765957
+      "unsupported_rate": 0.1721132897603486
     },
-    "zero_k10_revise_t50": {
-      "abstain_unanswerable": 0.5,
-      "citation_precision": 0.8324364723467862,
-      "correct": 0.845,
-      "unsupported_rate": 0.1297539149888143
+    "zero_k10_revens_t50": {
+      "abstain_unanswerable": 0.56,
+      "citation_precision": 0.8668949771689499,
+      "correct": 0.825,
+      "unsupported_rate": 0.06293706293706294
+    },
+    "zero_k10_revens_t70": {
+      "abstain_unanswerable": 0.58,
+      "citation_precision": 0.8909021406727827,
+      "correct": 0.795,
+      "unsupported_rate": 0.05502392344497608
+    },
+    "zero_k10_revens_t90": {
+      "abstain_unanswerable": 0.62,
+      "citation_precision": 0.9320754716981132,
+      "correct": 0.765,
+      "unsupported_rate": 0.03807106598984772
+    },
+    "zero_k10_revise_t90": {
+      "abstain_unanswerable": 0.54,
+      "citation_precision": 0.8639517345399699,
+      "correct": 0.84,
+      "unsupported_rate": 0.0896551724137931
     },
     "zero_k5": {
       "abstain_unanswerable": 0.4,
-      "citation_precision": 0.7445414847161572,
+      "citation_precision": 0.7510917030567685,
       "correct": 0.81,
-      "unsupported_rate": 0.2032854209445585
-    },
-    "zero_k5_repair_t50": {
-      "abstain_unanswerable": 0.4,
-      "citation_precision": 0.7763464337700146,
-      "correct": 0.81,
-      "unsupported_rate": 0.20123203285420946
-    },
-    "zero_k5_revise_t30": {
-      "abstain_unanswerable": 0.52,
-      "citation_precision": 0.8198198198198198,
-      "correct": 0.805,
-      "unsupported_rate": 0.1471861471861472
-    },
-    "zero_k5_revise_t50": {
-      "abstain_unanswerable": 0.54,
-      "citation_precision": 0.8361111111111111,
-      "correct": 0.81,
-      "unsupported_rate": 0.139186295503212
-    },
-    "zero_k5_revise_t70": {
-      "abstain_unanswerable": 0.56,
-      "citation_precision": 0.8412912912912913,
-      "correct": 0.815,
-      "unsupported_rate": 0.12875536480686695
+      "unsupported_rate": 0.18277310924369747
     }
   },
+  "strict_pipeline": "few_k10_revens_t90",
+  "strict_prompt": "few_shot",
+  "strict_tau": 0.9,
+  "strict_verifier": "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large",
   "tolerance": 0.02,
-  "verify_pipeline": "few_k10_revise_t50",
+  "verifier": null,
+  "verify_pipeline": "few_k10_revise_t90",
   "verify_policy": "revise",
   "verify_prompt": "few_shot",
-  "verify_tau": 0.5
+  "verify_tau": 0.9
 }

@@ -1,0 +1,107 @@
+{
+  "best_prompt": "cot",
+  "context_k": 10,
+  "dev_evidence": {
+    "cot_k10": {
+      "abstain_unanswerable": 0.66,
+      "citation_precision": 0.760180690399137,
+      "correct": 0.855,
+      "unsupported_rate": 0.15294117647058825
+    },
+    "cot_k10_revise_t50": {
+      "abstain_unanswerable": 0.68,
+      "citation_precision": 0.784232026143791,
+      "correct": 0.85,
+      "unsupported_rate": 0.10843373493975904
+    },
+    "cot_k10_revise_t70": {
+      "abstain_unanswerable": 0.68,
+      "citation_precision": 0.7933006535947714,
+      "correct": 0.855,
+      "unsupported_rate": 0.09063444108761329
+    },
+    "cot_k10_revise_t90": {
+      "abstain_unanswerable": 0.68,
+      "citation_precision": 0.8038587848932677,
+      "correct": 0.855,
+      "unsupported_rate": 0.0911854103343465
+    },
+    "few_k10": {
+      "abstain_unanswerable": 0.26,
+      "citation_precision": 0.7204096045197741,
+      "correct": 0.85,
+      "unsupported_rate": 0.19594594594594594
+    },
+    "few_k10_revise_t50": {
+      "abstain_unanswerable": 0.5,
+      "citation_precision": 0.8513986760623533,
+      "correct": 0.85,
+      "unsupported_rate": 0.0962962962962963
+    },
+    "few_k10_revise_t70": {
+      "abstain_unanswerable": 0.5,
+      "citation_precision": 0.8572923339739483,
+      "correct": 0.85,
+      "unsupported_rate": 0.09833024118738404
+    },
+    "few_k10_revise_t90": {
+      "abstain_unanswerable": 0.52,
+      "citation_precision": 0.8680133591898297,
+      "correct": 0.855,
+      "unsupported_rate": 0.09416195856873823
+    },
+    "s0_naive_fused_k10": {
+      "abstain_unanswerable": 0.04,
+      "citation_precision": 0.5685147849462366,
+      "correct": 0.77,
+      "unsupported_rate": 0.3243647234678625
+    },
+    "s1_naive_2hop_k10": {
+      "abstain_unanswerable": 0.04,
+      "citation_precision": 0.5555491551459293,
+      "correct": 0.83,
+      "unsupported_rate": 0.3093415007656968
+    },
+    "s1_naive_rerank_k10": {
+      "abstain_unanswerable": 0.0,
+      "citation_precision": 0.5724857142857143,
+      "correct": 0.785,
+      "unsupported_rate": 0.33979135618479883
+    },
+    "zero_k10": {
+      "abstain_unanswerable": 0.38,
+      "citation_precision": 0.7373737373737372,
+      "correct": 0.84,
+      "unsupported_rate": 0.17494600431965443
+    },
+    "zero_k10_revise_t50": {
+      "abstain_unanswerable": 0.52,
+      "citation_precision": 0.8442942942942943,
+      "correct": 0.845,
+      "unsupported_rate": 0.0958904109589041
+    },
+    "zero_k10_revise_t70": {
+      "abstain_unanswerable": 0.54,
+      "citation_precision": 0.866817496229261,
+      "correct": 0.84,
+      "unsupported_rate": 0.09090909090909091
+    },
+    "zero_k10_revise_t90": {
+      "abstain_unanswerable": 0.54,
+      "citation_precision": 0.8693815987933635,
+      "correct": 0.825,
+      "unsupported_rate": 0.091324200913242
+    },
+    "zero_k5": {
+      "abstain_unanswerable": 0.4,
+      "citation_precision": 0.7489082969432315,
+      "correct": 0.81,
+      "unsupported_rate": 0.18789144050104384
+    }
+  },
+  "tolerance": 0.02,
+  "verify_pipeline": "zero_k10_revise_t90",
+  "verify_policy": "revise",
+  "verify_prompt": "zero_shot",
+  "verify_tau": 0.9
+}

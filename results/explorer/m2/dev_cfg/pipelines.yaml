@@ -1,28 +1,25 @@
-# M2 dev sweep (250 dev questions), iteration 2 (rules v2, completion-first citation repair, revise
-# policy). Every choice used on the test suite is made here by `rageval gen choose`.
+# M2 dev sweep (250 dev questions), iteration 4: meta sentences ("... is not directly mentioned")
+# are abstentions, citation minimisation at the plain NLI threshold, and an ensemble verifier
+# (DeBERTa NLI and MiniCheck must both accept; policy name "revens" = revise with the ensemble).
 # {"alpha": 0.7, "ef_search": 256, "fusion": "weighted", "hop2_depth": 30, "hop2_keep": 2, "hop2_take": 1, "hops": 2, "plan_k": 5, "rerank": true, "rerank_blend": 0.0, "rerank_depth": 100} = dev-selected hybrid+rerank + two-hop splice; `hops: 1` turns the second hop off.
-# Names follow <prompt>_k<K>[_<policy>_t<tau*100>] so the choice rules can parse them.
 base:
   retrieval: {"alpha": 0.7, "ef_search": 256, "fusion": "weighted", "hop2_depth": 30, "hop2_keep": 2, "hop2_take": 1, "hops": 2, "plan_k": 5, "rerank": true, "rerank_blend": 0.0, "rerank_depth": 100}
-  context_k: 5
+  context_k: 10
   prompt: zero_shot
   verify: none
 pipelines:
-  s0_naive_fused_k10: {retrieval: {hops: 1, rerank: false}, context_k: 10, prompt: naive}
-  s1_naive_rerank_k10: {retrieval: {hops: 1}, context_k: 10, prompt: naive}
-  s1_naive_2hop_k10: {context_k: 10, prompt: naive}
-  zero_k5: {}
-  zero_k10: {context_k: 10}
-  few_k5: {prompt: few_shot}
-  few_k10: {prompt: few_shot, context_k: 10}
-  cot_k5: {prompt: cot}
-  cot_k10: {prompt: cot, context_k: 10}
-  zero_k5_repair_t50: {verify: repair, verify_tau: 0.5}
-  zero_k5_revise_t30: {verify: revise, verify_tau: 0.3}
-  zero_k5_revise_t50: {verify: revise, verify_tau: 0.5}
-  zero_k5_revise_t70: {verify: revise, verify_tau: 0.7}
-  few_k5_revise_t50: {prompt: few_shot, verify: revise, verify_tau: 0.5}
-  cot_k5_revise_t50: {prompt: cot, verify: revise, verify_tau: 0.5}
-  zero_k10_revise_t50: {context_k: 10, verify: revise, verify_tau: 0.5}
-  few_k10_revise_t50: {prompt: few_shot, context_k: 10, verify: revise, verify_tau: 0.5}
-  cot_k10_revise_t50: {prompt: cot, context_k: 10, verify: revise, verify_tau: 0.5}
+  s0_naive_fused_k10: {retrieval: {hops: 1, rerank: false}, prompt: naive}
+  s1_naive_rerank_k10: {retrieval: {hops: 1}, prompt: naive}
+  s1_naive_2hop_k10: {prompt: naive}
+  zero_k5: {context_k: 5}
+  zero_k10: {}
+  few_k10: {prompt: few_shot}
+  cot_k10: {prompt: cot}
+  zero_k10_revise_t90: {verify: revise, verify_tau: 0.9}
+  few_k10_revise_t90: {prompt: few_shot, verify: revise, verify_tau: 0.9}
+  zero_k10_revens_t50: {verify: revise, verify_tau: 0.5, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  zero_k10_revens_t70: {verify: revise, verify_tau: 0.7, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  zero_k10_revens_t90: {verify: revise, verify_tau: 0.9, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  few_k10_revens_t70: {prompt: few_shot, verify: revise, verify_tau: 0.7, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  few_k10_revens_t90: {prompt: few_shot, verify: revise, verify_tau: 0.9, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}
+  cot_k10_revens_t90: {prompt: cot, verify: revise, verify_tau: 0.9, verifier: "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli+lytang/MiniCheck-DeBERTa-v3-Large"}

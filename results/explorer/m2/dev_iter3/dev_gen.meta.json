@@ -1,0 +1,41 @@
+{
+  "gen_wall_seconds": 122.99104046449065,
+  "git_sha": "c4d1cd057194",
+  "host": "explorer-d4055",
+  "models": {
+    "corpus": "data/hotpot100k/corpus.jsonl",
+    "dense_index": "hnsw",
+    "embedder": "BAAI/bge-large-en-v1.5",
+    "embedder_url": null,
+    "fallback": "Qwen/Qwen3-1.7B",
+    "fallback_url": "http://127.0.0.1:8001",
+    "generator": "Qwen/Qwen3-8B",
+    "generator_url": "http://127.0.0.1:8000",
+    "index_dir": "artifacts/index/hotpot100k",
+    "reranker": "BAAI/bge-reranker-v2-m3",
+    "reranker_url": null,
+    "verifier": "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli",
+    "verifier_url": null
+  },
+  "pipelines": [
+    "s0_naive_fused_k10",
+    "s1_naive_rerank_k10",
+    "s1_naive_2hop_k10",
+    "zero_k5",
+    "zero_k10",
+    "few_k10",
+    "cot_k10",
+    "zero_k10_revise_t50",
+    "zero_k10_revise_t70",
+    "zero_k10_revise_t90",
+    "few_k10_revise_t50",
+    "few_k10_revise_t70",
+    "few_k10_revise_t90",
+    "cot_k10_revise_t50",
+    "cot_k10_revise_t70",
+    "cot_k10_revise_t90"
+  ],
+  "python": "3.12.3",
+  "started_unix": 1795300253.27325,
+  "suite": "data/hotpot100k/dev.jsonl"
+}

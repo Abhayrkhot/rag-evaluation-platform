@@ -1,6 +1,6 @@
 {
-  "gen_wall_seconds": 127.6465710811317,
-  "git_sha": "6c588045cade",
+  "gen_wall_seconds": 129.86439902707934,
+  "git_sha": "8d92ea9c7a75",
   "host": "explorer-d4055",
   "models": {
     "corpus": "data/hotpot100k/corpus.jsonl",
@@ -23,21 +23,18 @@
     "s1_naive_2hop_k10",
     "zero_k5",
     "zero_k10",
-    "few_k5",
     "few_k10",
-    "cot_k5",
     "cot_k10",
-    "zero_k5_repair_t50",
-    "zero_k5_revise_t30",
-    "zero_k5_revise_t50",
-    "zero_k5_revise_t70",
-    "few_k5_revise_t50",
-    "cot_k5_revise_t50",
-    "zero_k10_revise_t50",
-    "few_k10_revise_t50",
-    "cot_k10_revise_t50"
+    "zero_k10_revise_t90",
+    "few_k10_revise_t90",
+    "zero_k10_revens_t50",
+    "zero_k10_revens_t70",
+    "zero_k10_revens_t90",
+    "few_k10_revens_t70",
+    "few_k10_revens_t90",
+    "cot_k10_revens_t90"
   ],
   "python": "3.12.3",
-  "started_unix": 1795298672.7158716,
+  "started_unix": 1795302159.9487436,
   "suite": "data/hotpot100k/dev.jsonl"
 }

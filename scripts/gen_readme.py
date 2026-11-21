@@ -244,7 +244,14 @@ def prompts_block() -> str | None:
             r["a"] == "zero_shot"
             and r["b"] in ("few_shot", "cot")
             and r["metric"]
-            in ("unsupported_count", "has_unsupported", "correct", "citation_precision")
+            in (
+                "unsupported_count",
+                "has_unsupported",
+                "unsupported_rate",
+                "correct",
+                "citation_precision",
+                "abstain_unanswerable",
+            )
         ):
             p = r["p_mcnemar"] if r["p_mcnemar"] is not None else r["p_wilcoxon"]
             tests.append(
@@ -280,7 +287,10 @@ def prompts_block() -> str | None:
             ),
             "",
             f"Unsupported claims, `zero_shot` -> `{choice['best_prompt']}`: {z['unsupported_claims_total']} -> "
-            f"{b['unsupported_claims_total']} ({100 * cut:.0f}% fewer).",
+            f"{b['unsupported_claims_total']} ({100 * cut:.0f}% fewer over the suite). Part of that is fewer and more "
+            "cautious claims: on the questions both strategies answered, the per-claim unsupported rate falls less "
+            "and the difference is not significant (paired `unsupported_rate` row below), and CoT abstains more, "
+            "on unanswerable questions (good) and on answerable ones (bad).",
             "",
             "Paired tests (bootstrap CI on the per-question difference; McNemar for binary metrics, Wilcoxon otherwise; Holm across the family):",
             "",
@@ -340,6 +350,28 @@ def serving_block() -> str | None:
         f"Requests per mode: {c['base']['requests']} static, {tr['requests']} routed; errors {100 * c['base']['error_rate']:.2f}% / "
         f"{100 * tr['error_rate']:.2f}%. Routed traffic: {share}. Degraded stages: {deg}.",
     ]
+    prof = []
+    for suite in ("test", "full"):
+        sp = load(RES / f"explorer/m4/prep/serving_{suite}__gte-reranker-modernbert-base.json")
+        if sp:
+            r = next(
+                (x for x in sp["results"] if x["config"].get("family") == "serve_w07_d30"), None
+            )
+            if r:
+                prof.append(f"{suite} {pct(r['recall@10'])}")
+    par = load(cands[-1].parent / "parity.json")
+    if prof or par:
+        lines += [
+            "",
+            "Serving profile retrieval (single hop, gte-reranker-modernbert-base at depth 30): Recall@10 "
+            + ", ".join(prof)
+            + (
+                f". vLLM-served encoders vs the offline HF models: embedding cosine >= {par['embed_cosine_min']:.4f}, "
+                f"rerank Spearman {par['rerank_spearman_mean']:.3f}, top-10 overlap {100 * par['rerank_top10_overlap_mean']:.0f}%."
+                if par
+                else "."
+            ),
+        ]
     if c.get("sweep"):
         lines += [
             "",
@@ -407,12 +439,28 @@ def headline_block() -> str | None:
             ),
             None,
         )
+        pr = next(
+            (
+                r
+                for r in rep["paired"]
+                if r["a"] == "zero_shot"
+                and r["b"] == ch["best_prompt"]
+                and r["metric"] == "unsupported_rate"
+            ),
+            None,
+        )
         rows.append(
             [
                 f"Unsupported claims, zero-shot vs {ch['best_prompt']} (paired)",
                 "-32%",
                 f"-{100 * cut:.0f}% ({z['unsupported_claims_total']} -> {b['unsupported_claims_total']})"
-                + (f", Wilcoxon p (Holm) {p['p_holm']:.2g}" if p else ""),
+                + (f", Wilcoxon p (Holm) {p['p_holm']:.2g}" if p else "")
+                + (
+                    f"; per-claim rate on questions both answered {100 * pr['mean_a']:.1f}% -> "
+                    f"{100 * pr['mean_b']:.1f}% (p Holm {pr['p_holm']:.2g})"
+                    if pr
+                    else ""
+                ),
             ]
         )
     cands = (

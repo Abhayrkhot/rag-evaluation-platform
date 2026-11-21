@@ -18,6 +18,8 @@ Methodology: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). Architecture:
 | Claim | Target | Measured |
 |---|---|---|
 | Recall@10, hybrid FAISS + BM25 + reranking, 100K docs | 91% | 95.0% two-hop / 92.0% single-hop (7,018 questions); test suite 93.9% / 90.9% |
+| Citation precision, naive RAG -> final pipeline (500-question suite) | 76% -> 94% | 57.3% -> 85.4% (balanced, correct 81.8%) / 93.0% (strict, correct 73.8%); naive correct 75.8% |
+| Unsupported claims, zero-shot vs cot (paired) | -32% | -57% (198 -> 85), Wilcoxon p (Holm) 4.5e-13; per-claim rate on questions both answered 16.6% -> 14.1% (p Holm 1) |
 <!-- END:headline -->
 
 ## Retrieval: hybrid FAISS + BM25 + reranking over 100K documents
@@ -51,13 +53,48 @@ Second hop for bridge questions: the generator (Qwen3-8B) reads the top 5 first-
 ## Grounding: citation precision, stage by stage
 
 <!-- BEGIN:grounding -->
-_Pending: results not generated yet._
+Test suite, 500 questions (400 answerable, 100 unanswerable). Citation precision and recall are ALCE's, judged by TRUE (T5-11B NLI) over answered questions; correctness is gpt-oss-120b against the HotpotQA answer on answerable questions; abstention is on unanswerable questions. Generator: Qwen3-8B, greedy.
+
+| Stage | Citation precision | Citation recall | Correct (answerable) | Abstains (unanswerable) | Gold docs in context |
+|---|---|---|---|---|---|
+| S0 naive RAG: hybrid top-10, no reranking, plain "cite [n]" prompt | 57.3% [53.3, 61.3] | 35.1% [32.2, 38.0] | 75.8% [71.5, 80.0] | 6.0% | 89.5% |
+| S1a + cross-encoder reranking | 56.5% [52.5, 60.6] | 35.1% [32.2, 38.0] | 76.2% [72.0, 80.5] | 4.0% | 90.9% |
+| S1b + two-hop retrieval | 59.0% [55.0, 62.9] | 36.4% [33.6, 39.4] | 78.2% [74.2, 82.2] | 4.0% | 93.9% |
+| S2 + citation and grounding rules (zero-shot) | 71.5% [68.2, 74.8] | 68.6% [65.3, 71.8] | 80.5% [76.5, 84.2] | 31.0% | 93.9% |
+| S3 + best prompt strategy (picked on dev) (`cot`) | 75.8% [72.3, 79.2] | 78.9% [75.5, 82.2] | 77.8% [73.8, 81.8] | 70.0% | 93.9% |
+| S4 + NLI citation repair and one revision round (balanced) | 85.4% [82.9, 87.7] | 87.6% [85.3, 89.7] | 81.8% [78.0, 85.5] | 45.0% | 93.9% |
+| S4 strict: NLI and MiniCheck must both accept | 93.0% [91.3, 94.6] | 95.9% [94.5, 97.1] | 73.8% [69.5, 78.0] | 52.0% | 93.9% |
 <!-- END:grounding -->
 
 ## Prompt strategies: zero-shot vs few-shot vs chain of thought (paired)
 
 <!-- BEGIN:prompts -->
-_Pending: results not generated yet._
+Same 500 questions and identical retrieved contexts for every strategy; unsupported claims are statements gpt-oss-120b judges not fully supported by the documents the generator saw.
+
+| Strategy | Unsupported claims | Claims | Unsupported rate [95% CI] | Answers with one+ | Citation precision | Correct | Abstains (unanswerable) |
+|---|---|---|---|---|---|---|---|
+| zero_shot | 198 | 904 | 21.9% [19.1, 24.8] | 36.6% | 71.5% [68.2, 74.8] | 80.5% [76.5, 84.2] | 31.0% |
+| few_shot | 297 | 1232 | 24.1% [21.3, 27.0] | 41.2% | 70.7% [67.7, 73.7] | 82.2% [78.5, 86.0] | 20.0% |
+| cot | 85 | 660 | 12.9% [10.3, 15.6] | 19.4% | 75.8% [72.3, 79.2] | 77.8% [73.8, 81.8] | 70.0% |
+
+Unsupported claims, `zero_shot` -> `cot`: 198 -> 85 (57% fewer over the suite). Part of that is fewer and more cautious claims: on the questions both strategies answered, the per-claim unsupported rate falls less and the difference is not significant (paired `unsupported_rate` row below), and CoT abstains more, on unanswerable questions (good) and on answerable ones (bad).
+
+Paired tests (bootstrap CI on the per-question difference; McNemar for binary metrics, Wilcoxon otherwise; Holm across the family):
+
+| Comparison | Metric | n | Mean | Delta [95% CI] | p | p (Holm) |
+|---|---|---|---|---|---|---|
+| zero_shot vs few_shot | unsupported_count | 500 | 0.396 -> 0.594 | +0.198 [+0.134, +0.264] | 3.9e-09 | 1.1e-07 |
+| zero_shot vs few_shot | has_unsupported | 500 | 0.342 -> 0.396 | +0.054 [+0.014, +0.094] | 0.01 | 0.22 |
+| zero_shot vs few_shot | unsupported_rate | 465 | 0.235 -> 0.219 | -0.016 [-0.043, +0.011] | 0.065 | 1 |
+| zero_shot vs few_shot | citation_precision | 465 | 0.718 -> 0.720 | +0.002 [-0.030, +0.033] | 0.97 | 1 |
+| zero_shot vs few_shot | correct | 400 | 0.805 -> 0.823 | +0.018 [-0.013, +0.048] | 0.32 | 1 |
+| zero_shot vs few_shot | abstain_unanswerable | 100 | 0.310 -> 0.200 | -0.110 [-0.190, -0.040] | 0.0074 | 0.18 |
+| zero_shot vs cot | unsupported_count | 500 | 0.396 -> 0.170 | -0.226 [-0.280, -0.174] | 1.2e-14 | 4.5e-13 |
+| zero_shot vs cot | has_unsupported | 500 | 0.342 -> 0.152 | -0.190 [-0.232, -0.148] | 1.1e-17 | 4.3e-16 |
+| zero_shot vs cot | unsupported_rate | 390 | 0.166 -> 0.141 | -0.025 [-0.055, +0.004] | 0.15 | 1 |
+| zero_shot vs cot | citation_precision | 390 | 0.783 -> 0.757 | -0.025 [-0.065, +0.015] | 0.22 | 1 |
+| zero_shot vs cot | correct | 400 | 0.805 -> 0.777 | -0.028 [-0.060, +0.005] | 0.14 | 1 |
+| zero_shot vs cot | abstain_unanswerable | 100 | 0.310 -> 0.700 | +0.390 [+0.290, +0.490] | 3.8e-11 | 1.3e-09 |
 <!-- END:prompts -->
 
 ## Serving: LangGraph agent at 50 QPS, static vs fallback routing

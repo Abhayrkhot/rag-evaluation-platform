@@ -1,0 +1,15 @@
+{
+  "embed_cosine_mean": 0.9999427795410156,
+  "embed_cosine_min": 0.9999017715454102,
+  "meta": {
+    "embedder": "BAAI/bge-large-en-v1.5",
+    "git_sha": "c4d1cd057194",
+    "host": "explorer-d4054",
+    "python": "3.12.3",
+    "reranker": "Alibaba-NLP/gte-reranker-modernbert-base",
+    "started_unix": 1795301203.1241703
+  },
+  "rerank_spearman_mean": 0.998138193314335,
+  "rerank_spearman_min": 0.9952697699123559,
+  "rerank_top10_overlap_mean": 0.9899999999999999
+}
