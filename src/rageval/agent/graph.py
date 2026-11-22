@@ -376,7 +376,14 @@ class RAGAgent:
         if not self.cfg.retrieval.rerank or self.rerank_b is None:
             return "fuse_only"
         cap = self.cfg.rerank_max_inflight
-        if self.cfg.adaptive and cap and self.inflight["rerank"] >= cap:
+        # with a shallow depth configured, a backed-up reranker reranks fewer candidates (n_rerank)
+        # instead of being skipped
+        if (
+            self.cfg.adaptive
+            and cap
+            and not self.cfg.rerank_fast_depth
+            and self.inflight["rerank"] >= cap
+        ):
             return "fuse_only"
         rem = self.remaining_ms(state)
         if self.cfg.adaptive and rem is not None and rem < self.cfg.rerank_min_remaining_ms:
