@@ -1137,11 +1137,17 @@ def loadtest_calibrate(
     out: Annotated[Path, typer.Option()],
     target_qps: float = 50.0,
     workers: int = 4,
-    headroom: float = 1.5,
+    gen_headroom: float = 2.5,
+    stage_headroom: float = 1.5,
 ) -> None:
-    """Router thresholds from a capacity-sweep run (never from the measured runs):
-    max_inflight per worker = headroom x target_qps x mean generation latency / workers,
-    hedge_ms = generation p95, budget_ms = 3 x end-to-end p95."""
+    """Adaptive thresholds from a capacity-sweep run (never from the measured runs). With mean
+    stage latency L at the sweep point, the expected per-worker concurrency of a stage at the
+    target load is target_qps * L / workers (Little's law):
+      max_inflight (model overflow)   = gen_headroom   x expected generation concurrency
+      rerank / verify caps            = stage_headroom x expected stage concurrency
+      budget_ms                       = 3 x end-to-end p95
+      verify_fast_remaining_ms        = budget_ms - end-to-end p95 (requests already slower than the
+                                        sweep's p95 when they reach verification take the fast path)"""
     import math
 
     import numpy as np
@@ -1154,26 +1160,33 @@ def loadtest_calibrate(
         for r in read_jsonl(sweep_dir / "load.jsonl")
         if r.get("status") == 200 and r["at"] >= summ.get("warmup_s", 30)
     ]
-    gen = np.array(
-        [
-            r["timings_ms"]["generate"]
-            for r in rows
-            if r.get("timings_ms", {}).get("generate") is not None
-        ]
-    )
-    e2e = np.array([r["latency_ms"] for r in rows])
+
+    def stage(k: str) -> np.ndarray:
+        return np.array(
+            [r["timings_ms"][k] for r in rows if r.get("timings_ms", {}).get(k) is not None]
+        )
+
+    def conc(ms: np.ndarray, headroom: float) -> int:
+        return max(2, math.ceil(headroom * target_qps * float(ms.mean()) / 1e3 / workers))
+
+    gen, rr, ver = stage("generate"), stage("rerank"), stage("verify")
+    e2e_p95 = float(np.percentile([r["latency_ms"] for r in rows], 95))
+    budget = round(3 * e2e_p95)
     calib = {
         "from": str(sweep_dir),
         "sweep_qps": summ["offered_qps"],
         "gen_mean_ms": float(gen.mean()),
-        "gen_p95_ms": float(np.percentile(gen, 95)),
-        "e2e_p95_ms": float(np.percentile(e2e, 95)),
-        "max_inflight": max(4, math.ceil(headroom * target_qps * gen.mean() / 1e3 / workers)),
+        "rerank_mean_ms": float(rr.mean()),
+        "verify_mean_ms": float(ver.mean()),
+        "e2e_p95_ms": e2e_p95,
+        "max_inflight": conc(gen, gen_headroom),
+        "rerank_cap": conc(rr, stage_headroom),
+        "verify_cap": conc(ver, stage_headroom),
+        "budget_ms": budget,
+        "verify_fast_remaining_ms": round(budget - e2e_p95),
         "hedge_ms": round(float(np.percentile(gen, 95))),
-        "budget_ms": round(3 * float(np.percentile(e2e, 95))),
         "target_qps": target_qps,
         "workers": workers,
-        "headroom": headroom,
     }
     write_json(out, {"meta": run_meta(), **calib})
     _echo(calib)

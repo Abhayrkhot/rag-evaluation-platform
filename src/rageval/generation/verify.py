@@ -169,6 +169,19 @@ async def _minimize(
     return keep
 
 
+async def _check_fast(
+    s: Statement, docs: Sequence[tuple[str, str]], P: _Pairs, tau: float
+) -> tuple[list[int] | None, dict[str, Any], str]:
+    """Fallback path under load: one NLI call per statement (its cited documents), no repair
+    search and no minimisation. Unsupported statements are left to the caller to prune."""
+    n = len(docs)
+    cites0 = [c - 1 for c in s.citations if 1 <= c <= n]
+    record: dict[str, Any] = {"text": s.text, "before": [c + 1 for c in cites0], "fast": True}
+    if cites0 and (await P.get([(_premise(docs, cites0), s.text)]))[0] >= tau:
+        return cites0, record, "kept"
+    return None, record, "unsupported"
+
+
 async def _check(
     s: Statement,
     docs: Sequence[tuple[str, str]],
@@ -224,13 +237,17 @@ async def averify_answer(
     tau: float = 0.5,
     policy: str = "repair",
     pair_candidates: int = 6,
+    fast: bool = False,
 ) -> tuple[ParsedAnswer, VerifyStats]:
     st = VerifyStats()
     if parsed.abstained:
         return parsed, st
     P = _Pairs(aprob)
     claims = [s for s in parsed.statements if not s.abstain and s.text]
-    checks = await asyncio.gather(*(_check(s, docs, P, tau, pair_candidates) for s in claims))
+    if fast:
+        checks = await asyncio.gather(*(_check_fast(s, docs, P, tau) for s in claims))
+    else:
+        checks = await asyncio.gather(*(_check(s, docs, P, tau, pair_candidates) for s in claims))
     by_id = {id(s): c for s, c in zip(claims, checks, strict=True)}
     new_statements: list[Statement] = []
     for s in parsed.statements:

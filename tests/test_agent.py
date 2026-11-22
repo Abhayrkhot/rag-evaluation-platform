@@ -156,3 +156,16 @@ async def test_revise_policy_rewrites_flagged_sentences():
     out = await agent.answer("What is the capital of France?")
     assert "revise" in out["timings"]
     assert [s["text"] for s in out["response"]["statements"]] == ["Paris is the capital of France."]
+
+
+async def test_verify_fast_path_under_deadline():
+    agent = make_agent(
+        "Scott Derrickson is an American director [3].",
+        adaptive=True,
+        budget_ms=10_000,
+        verify_fast_remaining_ms=20_000,  # always "late": take the fast path
+    )
+    out = await agent.answer("Who is Scott Derrickson?")
+    assert "verify_fast" in out["degraded"]
+    # fast path does not search for a better citation: the wrong one is pruned instead
+    assert out["response"]["abstained"]

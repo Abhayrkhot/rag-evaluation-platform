@@ -60,6 +60,11 @@ class AgentConfig(BaseModel):
     # worker already has that many requests in that stage
     rerank_max_inflight: int = 0
     verify_max_inflight: int = 0
+    # stage-level fallbacks (adaptive only): rerank fewer candidates, or verify on the fast path
+    # (cited documents only, prune what fails) when the stage is backed up or the deadline is close
+    rerank_fast_depth: int = 0  # 0 = skip reranking instead
+    verify_fast_inflight: int = 0  # 0 = off
+    verify_fast_remaining_ms: float = 0.0
     verify_min_remaining_ms: float = 400.0
     revise_min_remaining_ms: float = 1500.0  # one revision round only with this much budget left
     verify_reserve_ms: float = 150.0  # budget held back from generation for verification
@@ -182,12 +187,26 @@ class RAGAgent:
         return {"fused": await self._search(state["question"], keep)}
 
     async def n_rerank(self, state: AgentState) -> dict[str, Any]:
-        cand = state["fused"][: self.cfg.retrieval.rerank_depth]
+        depth = self.cfg.retrieval.rerank_depth
+        upd: dict[str, Any] = {}
+        cap = self.cfg.rerank_max_inflight
+        if (
+            self.cfg.adaptive
+            and cap
+            and self.cfg.rerank_fast_depth
+            and self.inflight["rerank"] >= cap
+        ):
+            depth = self.cfg.rerank_fast_depth
+            upd["degraded"] = ["rerank_shallow"]
+            tm.DEGRADED_TOTAL.labels("rerank_shallow").inc()
+        cand = state["fused"][:depth]
         self.inflight["rerank"] += 1
         try:
-            return {"hits": await self._rerank(state["question"], cand)}
+            ranked = await self._rerank(state["question"], cand)
         finally:
             self.inflight["rerank"] -= 1
+        upd["hits"] = ranked + [d for d in state["fused"] if d not in set(cand)]
+        return upd
 
     async def n_plan(self, state: AgentState) -> dict[str, Any]:
         rc = self.cfg.retrieval
@@ -248,17 +267,32 @@ class RAGAgent:
         return [(self.corpus[d].title, self.corpus[d].text) for d in state["context"]]
 
     async def n_verify(self, state: AgentState) -> dict[str, Any]:
+        c = self.cfg
+        rem = self.remaining_ms(state)
+        fast = c.adaptive and (
+            (c.verify_fast_inflight and self.inflight["verify"] >= c.verify_fast_inflight)
+            or (c.verify_fast_remaining_ms and rem is not None and rem < c.verify_fast_remaining_ms)
+        )
         self.inflight["verify"] += 1
         try:
             parsed, st = await averify_answer(
                 state["parsed"],
                 self._docs(state),
                 self._aprob,
-                tau=self.cfg.verify_tau,
-                policy=self.cfg.verify,
+                tau=c.verify_tau,
+                policy="prune" if fast else c.verify,
+                fast=bool(fast),
             )
         finally:
             self.inflight["verify"] -= 1
+        if fast:
+            tm.DEGRADED_TOTAL.labels("verify_fast").inc()
+            return {
+                "parsed": parsed,
+                "unsupported": [],
+                "verify": {k: v for k, v in st.__dict__.items() if k != "detail"},
+                "degraded": ["verify_fast"],
+            }
         bad = [d["text"] for d in st.detail if d.get("unsupported")]
         upd: dict[str, Any] = {
             "parsed": parsed,

@@ -81,8 +81,8 @@ done
 
 # router thresholds calibrated on the static sweep point below the target load (not on the runs below)
 cli loadtest calibrate --sweep-dir "$R/sweep_q${CALIB_QPS:-40}" --out "$R/calibration.json" --workers "$API_WORKERS"
-read -r MAX_INFLIGHT HEDGE_MS BUDGET_MS < <(in_image python3 -c "import json; c=json.load(open('$R/calibration.json')); print(c['max_inflight'], c['hedge_ms'], c['budget_ms'])")
-echo "calibrated: max_inflight=$MAX_INFLIGHT hedge_ms=$HEDGE_MS budget_ms=$BUDGET_MS" | tee -a "$R/layout.txt"
+read -r MAX_INFLIGHT HEDGE_MS BUDGET_MS RERANK_CAP VERIFY_CAP VFAST_MS < <(in_image python3 -c "import json; c=json.load(open('$R/calibration.json')); print(c['max_inflight'], c['hedge_ms'], c['budget_ms'], c['rerank_cap'], c['verify_cap'], c['verify_fast_remaining_ms'])")
+echo "calibrated: max_inflight=$MAX_INFLIGHT hedge_ms=$HEDGE_MS budget_ms=$BUDGET_MS rerank_cap=$RERANK_CAP verify_cap=$VERIFY_CAP verify_fast_remaining_ms=$VFAST_MS" | tee -a "$R/layout.txt"
 
 for seed in 1 2 3; do
   order=(static adaptive); [ $((seed % 2)) -eq 0 ] && order=(adaptive static)
@@ -94,7 +94,8 @@ for seed in 1 2 3; do
       # fallback routing + graceful degradation; thresholds are per API worker (API_WORKERS of them)
       start_api "$tag" --set "router.max_inflight=$MAX_INFLIGHT" --set "router.hedge=${HEDGE:-false}" --set "router.hedge_ms=$HEDGE_MS" \
         --set agent.adaptive=true --set "agent.budget_ms=$BUDGET_MS" \
-        --set "agent.rerank_max_inflight=${RERANK_CAP:-24}" --set "agent.verify_max_inflight=${VERIFY_CAP:-24}"
+        --set "agent.rerank_max_inflight=$RERANK_CAP" --set "agent.rerank_fast_depth=${RERANK_FAST_DEPTH:-15}" \
+        --set "agent.verify_fast_inflight=$VERIFY_CAP" --set "agent.verify_fast_remaining_ms=$VFAST_MS"
     fi
     load "$tag" 50 "${DURATION:-240}" "$seed"
     stop_api "$tag"

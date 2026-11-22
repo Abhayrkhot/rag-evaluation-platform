@@ -59,3 +59,12 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   rose from 220 ms to 1.8 s p50, and the contended fallback generated slower (874 ms p50) than the
   primary (332 ms). Hedges almost never won. Next: fallback co-located with the primary on GPU0
   (GPU1 encoder-only) and hedging off (the tail here is load-induced, where duplicates add load).
+- **M4 main, model overflow with a co-located fallback** (archived as
+  `results/explorer/m4/main_fp8_model_overflow`, not used for claims). Still worse than static
+  (p95 about 5.7 s vs 2.0 s): the 1.7B on GPU0 slowed the primary (generation p50 409 -> 821 ms),
+  so 45% of requests overflowed, and the fallback's weaker answers failed the cited-document check
+  more often, which triggered the expensive repair search and backed up the verifier (p50 1.8 s).
+  The static trace logs showed where the tail actually is: the slowest 10% spent 915 ms in
+  verification (12.8 NLI pairs vs 3.8 for the fastest half) and 847 ms in generation.
+  Next: stage-level fallbacks (fast verification path and shallower reranking when a stage is
+  backed up or the request is late) with model overflow only above 2.5x normal concurrency.
