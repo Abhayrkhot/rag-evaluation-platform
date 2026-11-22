@@ -68,3 +68,9 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   verification (12.8 NLI pairs vs 3.8 for the fastest half) and 847 ms in generation.
   Next: stage-level fallbacks (fast verification path and shallower reranking when a stage is
   backed up or the request is late) with model overflow only above 2.5x normal concurrency.
+- **M4 main, stage fallbacks plus model overflow** (archived as
+  `results/explorer/m4/main_fp8_stage_plus_overflow`, not used for claims). Stage fallbacks cut
+  reranking p95 476 -> 109 ms and verification p95 1179 -> 252 ms, but 30% of requests still
+  overflowed to the co-located 1.7B and generation p95 doubled (970 -> 1962 ms), so end-to-end p95
+  was flat (2.0 vs 2.1-2.2 s). Final policy: stage fallbacks for latency, the model fallback only
+  as failover (breaker + retry on primary errors and timeouts).

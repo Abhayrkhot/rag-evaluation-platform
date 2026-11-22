@@ -19,7 +19,7 @@ AGENT=${AGENT:-'{"retrieval": {"fusion": "weighted", "alpha": 0.7, "rerank": tru
 cli serve-materialize --template configs/serve/explorer.yaml --out "$R/serve.yaml" --embedder "$EMB" --reranker "$RERANKER" --agent "$AGENT"
 POOL=(--suites data/hotpot100k/test.jsonl --suites data/hotpot100k/load_pool.jsonl)
 nvidia-smi --query-gpu=index,name,memory.total --format=csv > "$R/gpus.csv"
-echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER fallback_gpu=${FALLBACK_GPU:-0} hedge=${HEDGE:-false} agent=$AGENT" > "$R/layout.txt"
+echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER fallback_gpu=${FALLBACK_GPU:-0} hedge=${HEDGE:-false} overflow=${OVERFLOW:-false} deadline=${DEADLINE:-false} agent=$AGENT" > "$R/layout.txt"
 
 QARGS=(); [ "$PRECISION" = fp8 ] && QARGS=(--quantization fp8)
 # the fallback shares GPU0 with the primary (shed requests cost ~5x less compute there); GPU1 is
@@ -92,7 +92,10 @@ for seed in 1 2 3; do
       start_api "$tag" --set router=static
     else
       # fallback routing + graceful degradation; thresholds are per API worker (API_WORKERS of them)
+      # model fallback = failover (breaker + retry); load-based overflow/deadline routing to the
+      # co-located small model slowed the primary in every configuration tried (RESULTS_LOG)
       start_api "$tag" --set "router.max_inflight=$MAX_INFLIGHT" --set "router.hedge=${HEDGE:-false}" --set "router.hedge_ms=$HEDGE_MS" \
+        --set "router.overflow=${OVERFLOW:-false}" --set "router.deadline=${DEADLINE:-false}" \
         --set agent.adaptive=true --set "agent.budget_ms=$BUDGET_MS" \
         --set "agent.rerank_max_inflight=$RERANK_CAP" --set "agent.rerank_fast_depth=${RERANK_FAST_DEPTH:-15}" \
         --set "agent.verify_fast_inflight=$VERIFY_CAP" --set "agent.verify_fast_remaining_ms=$VFAST_MS"

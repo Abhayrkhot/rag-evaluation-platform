@@ -333,8 +333,11 @@ def serving_block() -> str | None:
     )
     lines = [
         f"Open-loop Poisson arrivals at 50 QPS, {c['seeds']} seeds per mode, alternating order, 30 s warm-up excluded (`{run}`). "
-        "Static: every request goes to the primary, full pipeline. Fallback routing: overflow, deadline, hedging, "
-        "circuit breaker and retry in the router, plus deadline-aware skipping of reranking/verification in the graph.",
+        "Static: every request takes the full serving pipeline on the primary model. Fallback routing: "
+        "stage fallbacks (rerank 15 instead of 30 candidates, or verify only the cited documents and prune "
+        "what fails) when that stage is backed up or the request is already late, model overflow to Qwen3-1.7B "
+        "above 2.5x normal primary concurrency, and the circuit breaker / retry; every threshold calibrated "
+        "from the 40 QPS sweep point, not from these runs (`calibration.json`).",
         "",
         table(
             [
