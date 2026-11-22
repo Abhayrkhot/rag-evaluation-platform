@@ -19,11 +19,15 @@ AGENT=${AGENT:-'{"retrieval": {"fusion": "weighted", "alpha": 0.7, "rerank": tru
 cli serve-materialize --template configs/serve/explorer.yaml --out "$R/serve.yaml" --embedder "$EMB" --reranker "$RERANKER" --agent "$AGENT"
 POOL=(--suites data/hotpot100k/test.jsonl --suites data/hotpot100k/load_pool.jsonl)
 nvidia-smi --query-gpu=index,name,memory.total --format=csv > "$R/gpus.csv"
-echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER agent=$AGENT" > "$R/layout.txt"
+echo "phase=$PHASE precision=$PRECISION reranker=$RERANKER fallback_gpu=${FALLBACK_GPU:-0} hedge=${HEDGE:-false} agent=$AGENT" > "$R/layout.txt"
 
 QARGS=(); [ "$PRECISION" = fp8 ] && QARGS=(--quantization fp8)
-start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization 0.9 --seed 0 "${QARGS[@]}"
-start_vllm Qwen/Qwen3-1.7B 8001 1 --max-model-len 4096 --gpu-memory-utilization 0.25 --seed 0
+# the fallback shares GPU0 with the primary (shed requests cost ~5x less compute there); GPU1 is
+# encoder-only. A fallback on the encoder GPU slowed verification for every request (RESULTS_LOG).
+FALLBACK_GPU=${FALLBACK_GPU:-0}
+if [ "$FALLBACK_GPU" = 0 ]; then PUTIL=0.66; FUTIL=0.22; else PUTIL=0.9; FUTIL=0.25; fi
+start_vllm Qwen/Qwen3-8B 8000 0 --max-model-len 4096 --gpu-memory-utilization "$PUTIL" --seed 0 "${QARGS[@]}"
+start_vllm Qwen/Qwen3-1.7B 8001 "$FALLBACK_GPU" --max-model-len 4096 --gpu-memory-utilization "$FUTIL" --seed 0
 
 # encoders on GPU1: embedder and reranker served by vLLM's pooling runner (CUDA graphs, unpadded
 # batches); the NLI verifier (DeBERTa, not supported by vLLM) in its own micro-batched process.
@@ -88,7 +92,7 @@ for seed in 1 2 3; do
       start_api "$tag" --set router=static
     else
       # fallback routing + graceful degradation; thresholds are per API worker (API_WORKERS of them)
-      start_api "$tag" --set "router.max_inflight=$MAX_INFLIGHT" --set "router.hedge_ms=$HEDGE_MS" \
+      start_api "$tag" --set "router.max_inflight=$MAX_INFLIGHT" --set "router.hedge=${HEDGE:-false}" --set "router.hedge_ms=$HEDGE_MS" \
         --set agent.adaptive=true --set "agent.budget_ms=$BUDGET_MS" \
         --set "agent.rerank_max_inflight=${RERANK_CAP:-24}" --set "agent.verify_max_inflight=${VERIFY_CAP:-24}"
     fi

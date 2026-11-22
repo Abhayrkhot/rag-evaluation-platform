@@ -52,3 +52,10 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   adaptive routing with hand-set thresholds sent 89% of traffic to the 1.7B fallback (p95 5.8 s).
   Neither number is meaningful. Next: FP8 primary alone on GPU0, NLI replicas on GPU1, and router
   thresholds calibrated from the 40 QPS sweep point (`rageval loadtest calibrate`).
+- **M4 main, FP8 primary, fallback on the encoder GPU** (archived as
+  `results/explorer/m4/main_fp8_fallback_on_encoder_gpu`, not used for claims). Static routing was
+  stable at 50 QPS (p95 1.97 s). Adaptive routing was worse (p95 5.9-6.3 s): requests shed to the
+  1.7B fallback and hedge duplicates ran on GPU1 next to the reranker and NLI replicas, verification
+  rose from 220 ms to 1.8 s p50, and the contended fallback generated slower (874 ms p50) than the
+  primary (332 ms). Hedges almost never won. Next: fallback co-located with the primary on GPU0
+  (GPU1 encoder-only) and hedging off (the tail here is load-induced, where duplicates add load).
