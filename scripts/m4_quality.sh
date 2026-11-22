@@ -18,3 +18,11 @@ cli gen judge-llm --records "$Q/records.jsonl" --out "$Q/llm.json" --llm-url htt
 stop_vllms
 cli gen merge --records "$Q/records.jsonl" --nli "$Q/nli.json" --llm "$Q/llm.json" --out "$Q/judged.jsonl"
 cli gen report --judged "$Q/judged.jsonl" --out "$Q/report.json"
+# per mode (routes pooled): q50_static vs q50_adaptive
+in_image python3 -c "
+import json
+with open('$Q/judged.jsonl') as f, open('$Q/judged_by_mode.jsonl', 'w') as g:
+    for line in f:
+        r = json.loads(line); r['pipeline'] = r['pipeline'].split('/')[0]; g.write(json.dumps(r) + '\n')
+"
+cli gen report --judged "$Q/judged_by_mode.jsonl" --out "$Q/report_by_mode.json"
