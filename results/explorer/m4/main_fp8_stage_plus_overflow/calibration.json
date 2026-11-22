@@ -1,0 +1,22 @@
+{
+  "budget_ms": 3116,
+  "e2e_p95_ms": 1038.6683825636283,
+  "from": "results/m4/main_fp8/sweep_q40",
+  "gen_mean_ms": 325.76887504029065,
+  "hedge_ms": 667,
+  "max_inflight": 11,
+  "meta": {
+    "git_sha": "c7c92b193164",
+    "host": "explorer-d4054",
+    "python": "3.12.3",
+    "started_unix": 1795313441.6295352
+  },
+  "rerank_cap": 2,
+  "rerank_mean_ms": 85.1920495820646,
+  "sweep_qps": 39.46666666666667,
+  "target_qps": 50.0,
+  "verify_cap": 3,
+  "verify_fast_remaining_ms": 2077,
+  "verify_mean_ms": 146.96044388512786,
+  "workers": 4
+}

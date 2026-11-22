@@ -203,6 +203,9 @@ class RAGAgent:
         self.inflight["rerank"] += 1
         try:
             ranked = await self._rerank(state["question"], cand)
+        except Exception:  # reranker down: keep the fused order rather than fail the request
+            tm.DEGRADED_TOTAL.labels("rerank_error").inc()
+            return {"hits": state["fused"], "degraded": [*upd.get("degraded", []), "rerank_error"]}
         finally:
             self.inflight["rerank"] -= 1
         upd["hits"] = ranked + [d for d in state["fused"] if d not in set(cand)]
@@ -283,6 +286,9 @@ class RAGAgent:
                 policy="prune" if fast else c.verify,
                 fast=bool(fast),
             )
+        except Exception:  # verifier down: return the unverified answer, flagged
+            tm.DEGRADED_TOTAL.labels("verify_error").inc()
+            return {"unsupported": [], "degraded": ["verify_error"]}
         finally:
             self.inflight["verify"] -= 1
         if fast:

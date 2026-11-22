@@ -1,0 +1,3 @@
+{"kind":"nli","model":"MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli","batches":7271,"items":33847,"busy_s":347.057}
+{"kind":"nli","model":"MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli","batches":7196,"items":34150,"busy_s":349.965}
+{"kind":"nli","model":"MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli","batches":7186,"items":34271,"busy_s":348.769}

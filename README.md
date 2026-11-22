@@ -20,6 +20,7 @@ Methodology: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). Architecture:
 | Recall@10, hybrid FAISS + BM25 + reranking, 100K docs | 91% | 95.0% two-hop / 92.0% single-hop (7,018 questions); test suite 93.9% / 90.9% |
 | Citation precision, naive RAG -> final pipeline (500-question suite) | 76% -> 94% | 57.3% -> 85.4% (balanced, correct 81.8%) / 93.0% (strict, correct 73.8%); naive correct 75.8% |
 | Unsupported claims, zero-shot vs cot (paired) | -32% | -57% (198 -> 85), Wilcoxon p (Holm) 4.5e-13; per-claim rate on questions both answered 16.6% -> 14.1% (p Holm 1) |
+| p95 latency at 50 QPS, static vs fallback routing | -28% | -35% (1.97 s -> 1.29 s; 95% CI 30 to 39%) |
 <!-- END:headline -->
 
 ## Retrieval: hybrid FAISS + BM25 + reranking over 100K documents
@@ -100,7 +101,29 @@ Paired tests (bootstrap CI on the per-question difference; McNemar for binary me
 ## Serving: LangGraph agent at 50 QPS, static vs fallback routing
 
 <!-- BEGIN:serving -->
-_Pending: results not generated yet._
+Open-loop Poisson arrivals at 50 QPS, 2 seeds per mode, alternating order, 30 s warm-up excluded (`main_fp8`). Static: every request takes the full serving pipeline on the primary model. Fallback routing: stage fallbacks (rerank 15 instead of 30 candidates, or verify only the cited documents and prune what fails, skipping the repair search) when that stage is backed up or the request is already late, plus model failover to Qwen3-1.7B through the circuit breaker and retry. Thresholds are calibrated from the 40 QPS sweep point, not from these runs (`calibration.json`). Load-based overflow, deadline routing and hedging to the small model were tried and made p95 worse here; see docs/RESULTS_LOG.md.
+
+| Latency | Static | Fallback routing | Reduction [95% CI, block bootstrap] | Per seed (static / routed), s |
+|---|---|---|---|---|
+| p50 | 0.84 s | 0.65 s | 22% [17, 26] | 0.81, 0.86 / 0.65, 0.66 |
+| p90 | 1.66 s | 1.16 s | 30% [26, 34] | 1.64, 1.69 / 1.14, 1.18 |
+| p95 | 1.97 s | 1.29 s | 35% [30, 39] | 1.95, 1.99 / 1.27, 1.31 |
+| p99 | 2.78 s | 1.58 s | 43% [36, 49] | 2.80, 2.73 / 1.56, 1.62 |
+
+Requests per mode: 21166 static, 21166 routed; errors 0.00% / 0.00%. Routed traffic: primary 100.0%. Degraded stages: rerank 0.5%, rerank_shallow 27.8%, verify 0.0%, verify_fast 19.0%.
+
+Serving profile retrieval (single hop, gte-reranker-modernbert-base at depth 30): Recall@10 test 91.4%, full 91.2%. vLLM-served encoders vs the offline HF models: embedding cosine >= 0.9999, rerank Spearman 0.998, top-10 overlap 99%.
+
+A third seed per mode was started and aborted when the reranker's vLLM engine died with a CUDA launch failure (error 719) after 32 minutes of sustained load; its requests are excluded (`aborted_seed3/README.txt`). The agent now degrades on encoder errors (fused order, unverified answer) instead of failing the request.
+
+Capacity sweep with static routing (sizing):
+
+| Offered QPS | p50 | p95 | p99 | Errors |
+|---|---|---|---|---|
+| 29.5 | 0.40 s | 0.76 s | 0.97 s | 0.0% |
+| 39.5 | 0.51 s | 1.06 s | 1.47 s | 0.0% |
+| 50.1 | 0.81 s | 1.88 s | 2.55 s | 0.0% |
+| 60.4 | 18.02 s | 37.47 s | 42.45 s | 24.5% |
 <!-- END:serving -->
 
 ## Reproduce

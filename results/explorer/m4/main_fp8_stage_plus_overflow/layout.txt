@@ -1,0 +1,2 @@
+phase=main precision=fp8 reranker=Alibaba-NLP/gte-reranker-modernbert-base fallback_gpu=0 hedge=false agent={"retrieval": {"fusion": "weighted", "alpha": 0.7, "rerank": true, "rerank_depth": 30, "ef_search": 256}, "context_k": 5, "prompt": "zero_shot", "verify": "repair", "verify_tau": 0.5}
+calibrated: max_inflight=11 hedge_ms=667 budget_ms=3116 rerank_cap=2 verify_cap=3 verify_fast_remaining_ms=2077

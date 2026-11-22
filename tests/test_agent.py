@@ -169,3 +169,16 @@ async def test_verify_fast_path_under_deadline():
     assert "verify_fast" in out["degraded"]
     # fast path does not search for a better citation: the wrong one is pruned instead
     assert out["response"]["abstained"]
+
+
+async def test_encoder_failures_degrade_instead_of_failing():
+    agent = make_agent("Paris is the capital of France [1].")
+
+    async def down(items):
+        raise ConnectionError("encoder down")
+
+    agent.rerank_b.submit = down
+    agent.verifier.submit = down
+    out = await agent.answer("What is the capital of France?")
+    assert out["degraded"] == ["rerank_error", "verify_error"]
+    assert not out["response"]["abstained"] and out["response"]["answer"].startswith("Paris")

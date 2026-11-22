@@ -74,3 +74,9 @@ Decisions and dead ends, in order, so the final configuration can be traced.
   overflowed to the co-located 1.7B and generation p95 doubled (970 -> 1962 ms), so end-to-end p95
   was flat (2.0 vs 2.1-2.2 s). Final policy: stage fallbacks for latency, the model fallback only
   as failover (breaker + retry on primary errors and timeouts).
+- **M4 main, final** (`results/explorer/m4/main_fp8`). Stage fallbacks plus failover-only model
+  routing, thresholds from the 40 QPS sweep. At 50 QPS (2 seeds per mode, 21,166 requests each):
+  p95 1.97 -> 1.29 s (35% lower, 95% block-bootstrap CI 30-39%), p99 43% lower, p50 22% lower, no
+  errors, all traffic on the primary; 28% of requests reranked a shallow head and 19% took the fast
+  verification path. A third seed aborted when the reranker's vLLM engine died (CUDA launch failure
+  after 32 minutes); the agent now degrades on encoder errors instead of failing requests.

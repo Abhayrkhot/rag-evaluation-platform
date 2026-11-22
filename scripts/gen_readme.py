@@ -18,6 +18,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "results"
 README = ROOT / "README.md"
+# the measured serving run; the other results/explorer/m4/main_* directories are documented dead ends
+FINAL_M4 = RES / "explorer/m4/main_fp8"
 
 
 def load(path: Path) -> Any:
@@ -303,11 +305,7 @@ def prompts_block() -> str | None:
 
 
 def serving_block() -> str | None:
-    cands = (
-        sorted((RES / "explorer/m4").glob("main_*/compare_q50.json"))
-        if (RES / "explorer/m4").exists()
-        else []
-    )
+    cands = [FINAL_M4 / "compare_q50.json"] if (FINAL_M4 / "compare_q50.json").exists() else []
     if not cands:
         return None
     c = load(cands[-1])
@@ -375,6 +373,15 @@ def serving_block() -> str | None:
                 if par
                 else "."
             ),
+        ]
+    ab = FINAL_M4 / "aborted_seed3" / "README.txt"
+    if ab.exists():
+        lines += [
+            "",
+            "A third seed per mode was started and aborted when the reranker's vLLM engine died with a CUDA launch "
+            "failure (error 719) after 32 minutes of sustained load; its requests are excluded "
+            "(`aborted_seed3/README.txt`). The agent now degrades on encoder errors (fused order, unverified answer) "
+            "instead of failing the request.",
         ]
     if c.get("sweep"):
         lines += [
@@ -467,11 +474,7 @@ def headline_block() -> str | None:
                 ),
             ]
         )
-    cands = (
-        sorted((RES / "explorer/m4").glob("main_*/compare_q50.json"))
-        if (RES / "explorer/m4").exists()
-        else []
-    )
+    cands = [FINAL_M4 / "compare_q50.json"] if (FINAL_M4 / "compare_q50.json").exists() else []
     if cands:
         c = load(cands[-1])
         x = c["p95"]

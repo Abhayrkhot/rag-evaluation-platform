@@ -1,0 +1,19 @@
+{
+  "budget_ms": 3345,
+  "e2e_p95_ms": 1114.9526807828806,
+  "from": "results/m4/main_fp8/sweep_q40",
+  "gen_mean_ms": 324.83077927712543,
+  "gen_p95_ms": 670.1769929612055,
+  "headroom": 1.5,
+  "hedge_ms": 670,
+  "max_inflight": 7,
+  "meta": {
+    "git_sha": "362dbf4479f8",
+    "host": "explorer-d4054",
+    "python": "3.12.3",
+    "started_unix": 1795308474.2513855
+  },
+  "sweep_qps": 39.46666666666667,
+  "target_qps": 50.0,
+  "workers": 4
+}
