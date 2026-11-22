@@ -19,7 +19,7 @@ Methodology: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). Architecture:
 |---|---|---|
 | Recall@10, hybrid FAISS + BM25 + reranking, 100K docs | 91% | 95.0% two-hop / 92.0% single-hop (7,018 questions); test suite 93.9% / 90.9% |
 | Citation precision, naive RAG -> final pipeline (500-question suite) | 76% -> 94% | 57.3% -> 85.4% (balanced, correct 81.8%) / 93.0% (strict, correct 73.8%); naive correct 75.8% |
-| Unsupported claims, zero-shot vs cot (paired) | -32% | -57% (198 -> 85), Wilcoxon p (Holm) 4.5e-13; per-claim rate on questions both answered 16.6% -> 14.1% (p Holm 1) |
+| Unsupported claims, zero-shot vs cot (paired) | -32% | -57% (198 -> 85), Wilcoxon p (Holm) 4.5e-13; per-claim rate on questions both answered 16.6% -> 14.1% (not significant) |
 | p95 latency at 50 QPS, static vs fallback routing | -28% | -35% (1.97 s -> 1.29 s; 95% CI 30 to 39%) |
 <!-- END:headline -->
 

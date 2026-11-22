@@ -517,7 +517,9 @@ def headline_block() -> str | None:
                 + (f", Wilcoxon p (Holm) {p['p_holm']:.2g}" if p else "")
                 + (
                     f"; per-claim rate on questions both answered {100 * pr['mean_a']:.1f}% -> "
-                    f"{100 * pr['mean_b']:.1f}% (p Holm {pr['p_holm']:.2g})"
+                    f"{100 * pr['mean_b']:.1f}% ("
+                    + ("not significant" if pr["p_holm"] > 0.05 else f"Holm p {pr['p_holm']:.2g}")
+                    + ")"
                     if pr
                     else ""
                 ),
