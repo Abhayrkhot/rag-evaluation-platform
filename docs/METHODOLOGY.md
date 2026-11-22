@@ -106,7 +106,11 @@ Every compared configuration answers the same questions with the same retrieved 
   models used offline is checked before every load test, `rageval bench parity`), and micro-batched
   `rageval encoders serve` replicas for the DeBERTa verifier (not supported by vLLM). The agent API
   runs several uvicorn workers that call them over HTTP.
-- Static routing: every request takes the full serving pipeline on the primary model. Adaptive:
-  the router's overflow, deadline, hedging, breaker and retry policies, plus shedding of reranking
-  or verification when the deadline is close or that stage already has too many requests in flight.
-  Thresholds (per API worker) were set from the capacity probes, not from the measured runs.
+- Static routing: every request takes the full serving pipeline on the primary model. Fallback
+  routing: stage fallbacks (shallow reranking, fast verification) when a stage is backed up or the
+  request is late, plus model failover (breaker and retry). Per-worker thresholds come from the
+  static 40 QPS sweep point (`rageval loadtest calibrate`, Little's law on mean stage latency),
+  never from the measured 50 QPS runs.
+- Deployment for the measured runs: two H200s; GPU0 runs the FP8 Qwen3-8B primary and the Qwen3-1.7B
+  fallback; GPU1 runs the vLLM embedder and reranker and three NLI replicas. The BF16 primary
+  saturated between 30 and 40 QPS, so static routing at 50 QPS would have had an unbounded queue.

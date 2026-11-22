@@ -32,20 +32,22 @@ flowchart LR
   Lists are fused with reciprocal rank fusion or a min-max weighted sum; the fused head is
   reranked by a cross-encoder.
 - **Generation**: the prompt shows the top-k documents numbered `[1]..[k]` and requires a citation on
-  every sentence. `FallbackRouter` (`src/rageval/llm/router.py`) picks the primary or fallback model
-  per request:
-  - overflow: primary already has `max_inflight` requests in flight;
-  - deadline: the primary's load-scaled EWMA latency exceeds the request's remaining budget;
-  - hedge: no primary answer after `hedge_ms`, so the fallback races it and the loser is cancelled;
-  - circuit breaker: consecutive primary failures open the breaker, half-open probes close it;
-  - retry: a failed primary call is retried once on the fallback.
-  The static baseline turns all of these off.
+  every sentence. `FallbackRouter` (`src/rageval/llm/router.py`) sits between the agent and the two
+  vLLM endpoints and implements:
+  - circuit breaker: consecutive primary failures open the breaker; half-open probes close it;
+  - retry: a failed or timed-out primary call is retried once on the fallback;
+  - overflow, deadline and hedging policies (load-based routing to the fallback), all off in the
+    measured deployment: with the fallback sharing the primary's GPU they made p95 worse
+    (`docs/RESULTS_LOG.md`).
+- **Stage fallbacks** (`adaptive: true`): when the reranker is backed up the graph reranks 15 instead
+  of 30 candidates; when the verifier is backed up or the request is already late, verification
+  checks only the cited documents and prunes what fails instead of running the repair search. Both
+  are recorded in the response, the trace log and `rag_degraded_total`. The trace logs are what
+  located the tail: the slowest 10% of requests at 50 QPS spent most of their time in the
+  verifier's repair search and in primary queueing.
 - **Verification**: each statement's citations are checked with an NLI model. Unnecessary
   citations are dropped, unsupported ones re-attached to the context document (or pair) that
   entails the statement, and statements nothing supports are pruned (or kept, policy `repair`).
-- **Deadlines**: with `adaptive: true` the graph skips reranking or verification when the request's
-  remaining budget is below a threshold, and records the skipped stage in the response, trace log
-  and `rag_degraded_total`.
 
 ## Observability
 

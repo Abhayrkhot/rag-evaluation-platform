@@ -132,7 +132,7 @@ fallback, the agent API, Jaeger, Prometheus, Grafana).
 - Small dev set. Every choice (fusion, depth, splice, K, prompt, verifier threshold) was made on 250 dev questions (200 answerable), so the dev picks are noisy; the test suite and the 7,018-question full set were each scored once with the frozen choices.
 - Precision vs correctness. The strict citation operating point prunes more aggressively and answers fewer questions correctly than the balanced one; both are reported.
 - Serving profile differs from the best offline pipeline. Two-hop retrieval, 10-document contexts and the revision round cost extra LLM calls, so the 50 QPS deployment serves a latency profile (single hop, ModernBERT reranker at depth 30, 5 documents, NLI repair without revision) whose retrieval recall is reported in its own section.
-- Hardware-specific latency. The load tests run on two H200s (one primary Qwen3-8B, one GPU shared by the fallback model and the encoders) with a single-node API; the fallback GPU is idle under static routing, which is part of what routing exploits. Results will differ on other hardware.
+- Hardware-specific latency. The load tests run on two H200s (GPU0: FP8 Qwen3-8B primary and the Qwen3-1.7B failover model; GPU1: vLLM embedder and reranker plus three NLI replicas) with a single-node API. The FP8 primary is not the BF16 model the offline evaluation used; answer quality under load is judged separately. Results will differ on other hardware.
 <!-- END:limitations -->
 
 ## Layout

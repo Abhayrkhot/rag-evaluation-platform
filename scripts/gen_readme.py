@@ -334,10 +334,11 @@ def serving_block() -> str | None:
     lines = [
         f"Open-loop Poisson arrivals at 50 QPS, {c['seeds']} seeds per mode, alternating order, 30 s warm-up excluded (`{run}`). "
         "Static: every request takes the full serving pipeline on the primary model. Fallback routing: "
-        "stage fallbacks (rerank 15 instead of 30 candidates, or verify only the cited documents and prune "
-        "what fails) when that stage is backed up or the request is already late, model overflow to Qwen3-1.7B "
-        "above 2.5x normal primary concurrency, and the circuit breaker / retry; every threshold calibrated "
-        "from the 40 QPS sweep point, not from these runs (`calibration.json`).",
+        "stage fallbacks (rerank 15 instead of 30 candidates, or verify only the cited documents and prune what "
+        "fails, skipping the repair search) when that stage is backed up or the request is already late, plus "
+        "model failover to Qwen3-1.7B through the circuit breaker and retry. Thresholds are calibrated from the "
+        "40 QPS sweep point, not from these runs (`calibration.json`). Load-based overflow, deadline routing and "
+        "hedging to the small model were tried and made p95 worse here; see docs/RESULTS_LOG.md.",
         "",
         table(
             [
@@ -510,9 +511,10 @@ def limitations_block() -> str | None:
         "the revision round cost extra LLM calls, so the 50 QPS deployment serves a latency profile (single "
         "hop, ModernBERT reranker at depth 30, 5 documents, NLI repair without revision) whose retrieval recall "
         "is reported in its own section.",
-        "Hardware-specific latency. The load tests run on two H200s (one primary Qwen3-8B, one GPU shared by the "
-        "fallback model and the encoders) with a single-node API; the fallback GPU is idle under static routing, "
-        "which is part of what routing exploits. Results will differ on other hardware.",
+        "Hardware-specific latency. The load tests run on two H200s (GPU0: FP8 Qwen3-8B primary and the "
+        "Qwen3-1.7B failover model; GPU1: vLLM embedder and reranker plus three NLI replicas) with a "
+        "single-node API. The FP8 primary is not the BF16 model the offline evaluation used; answer quality "
+        "under load is judged separately. Results will differ on other hardware.",
     ]
     return "\n".join(f"- {x}" for x in items)
 
