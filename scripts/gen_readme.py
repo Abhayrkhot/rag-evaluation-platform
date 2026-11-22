@@ -374,6 +374,48 @@ def serving_block() -> str | None:
                 else "."
             ),
         ]
+    qual = load(FINAL_M4 / "quality" / "report_by_mode.json")
+    if qual:
+        S = qual["summary"]
+        qrows = []
+        for mode, label in (("q50_static", "Static"), ("q50_adaptive", "Fallback routing")):
+            x = S.get(mode)
+            if x:
+                qrows.append(
+                    [
+                        label,
+                        str(x["n"]),
+                        pct_ci(x.get("citation_precision")),
+                        pct_ci(x.get("correct")),
+                        pct(x.get("unsupported_rate")),
+                    ]
+                )
+        lines += [
+            "",
+            "Quality of the answers served during these runs (test-suite questions in the request pool, judged "
+            "like the offline results; the FP8 primary and the 5-document serving profile make these lower than "
+            "the offline pipeline's):",
+            "",
+            table(
+                [
+                    "Mode",
+                    "Answers",
+                    "Citation precision",
+                    "Correct (answerable)",
+                    "Unsupported rate",
+                ],
+                qrows,
+            ),
+        ]
+        bp = load(FINAL_M4 / "quality" / "by_path.json")
+        if bp:
+            parts = [
+                f"{k.split('/', 1)[1]}: n={v['n']}, citation precision {pct({'mean': v['citation_precision']}) if v['citation_precision'] is not None else 'n/a'}, "
+                f"correct {pct({'mean': v['correct']}) if v['correct'] is not None else 'n/a'}"
+                for k, v in bp.items()
+                if k.startswith("q50_adaptive/")
+            ]
+            lines += ["", "Routed answers by path: " + "; ".join(parts) + "."]
     ab = FINAL_M4 / "aborted_seed3" / "README.txt"
     if ab.exists():
         lines += [
