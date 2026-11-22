@@ -1,0 +1,44 @@
+{
+  "q50_adaptive/full": {
+    "n": 304,
+    "citation_precision": 0.7866071428571428,
+    "correct": 0.7795918367346939,
+    "unsupported_rate": 0.20930232558139536
+  },
+  "q50_adaptive/rerank": {
+    "n": 4,
+    "citation_precision": 0.6666666666666666,
+    "correct": 0.6666666666666666,
+    "unsupported_rate": 0.0
+  },
+  "q50_adaptive/rerank+verify_fast": {
+    "n": 1,
+    "citation_precision": 1.0,
+    "correct": 1.0,
+    "unsupported_rate": 0.0
+  },
+  "q50_adaptive/rerank_shallow": {
+    "n": 100,
+    "citation_precision": 0.7784090909090909,
+    "correct": 0.7619047619047619,
+    "unsupported_rate": 0.2011173184357542
+  },
+  "q50_adaptive/rerank_shallow+verify_fast": {
+    "n": 41,
+    "citation_precision": 0.9357142857142857,
+    "correct": 0.625,
+    "unsupported_rate": 0.05172413793103448
+  },
+  "q50_adaptive/verify_fast": {
+    "n": 89,
+    "citation_precision": 0.9329268292682927,
+    "correct": 0.676056338028169,
+    "unsupported_rate": 0.0896551724137931
+  },
+  "q50_static/full": {
+    "n": 539,
+    "citation_precision": 0.7809288537549407,
+    "correct": 0.7729357798165137,
+    "unsupported_rate": 0.21215043394406943
+  }
+}

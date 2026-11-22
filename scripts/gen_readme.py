@@ -413,9 +413,16 @@ def serving_block() -> str | None:
                 f"{k.split('/', 1)[1]}: n={v['n']}, citation precision {pct({'mean': v['citation_precision']}) if v['citation_precision'] is not None else 'n/a'}, "
                 f"correct {pct({'mean': v['correct']}) if v['correct'] is not None else 'n/a'}"
                 for k, v in bp.items()
-                if k.startswith("q50_adaptive/")
+                if k.startswith("q50_adaptive/") and v["n"] >= 20
             ]
-            lines += ["", "Routed answers by path: " + "; ".join(parts) + "."]
+            lines += [
+                "",
+                "Routed answers by path (paths with 20+ answers): "
+                + "; ".join(parts)
+                + ". The shallow rerank "
+                "path costs little; the fast verification path prunes instead of repairing, which raises citation "
+                "precision and lowers correctness.",
+            ]
     ab = FINAL_M4 / "aborted_seed3" / "README.txt"
     if ab.exists():
         lines += [

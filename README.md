@@ -114,6 +114,15 @@ Requests per mode: 21166 static, 21166 routed; errors 0.00% / 0.00%. Routed traf
 
 Serving profile retrieval (single hop, gte-reranker-modernbert-base at depth 30): Recall@10 test 91.4%, full 91.2%. vLLM-served encoders vs the offline HF models: embedding cosine >= 0.9999, rerank Spearman 0.998, top-10 overlap 99%.
 
+Quality of the answers served during these runs (test-suite questions in the request pool, judged like the offline results; the FP8 primary and the 5-document serving profile make these lower than the offline pipeline's):
+
+| Mode | Answers | Citation precision | Correct (answerable) | Unsupported rate |
+|---|---|---|---|---|
+| Static | 539 | 78.1% [75.4, 80.7] | 77.3% [73.2, 81.2] | 21.2% |
+| Fallback routing | 539 | 82.0% [79.3, 84.5] | 74.8% [70.6, 78.7] | 17.8% |
+
+Routed answers by path (paths with 20+ answers): full: n=304, citation precision 78.7%, correct 78.0%; rerank_shallow: n=100, citation precision 77.8%, correct 76.2%; rerank_shallow+verify_fast: n=41, citation precision 93.6%, correct 62.5%; verify_fast: n=89, citation precision 93.3%, correct 67.6%. The shallow rerank path costs little; the fast verification path prunes instead of repairing, which raises citation precision and lowers correctness.
+
 A third seed per mode was started and aborted when the reranker's vLLM engine died with a CUDA launch failure (error 719) after 32 minutes of sustained load; its requests are excluded (`aborted_seed3/README.txt`). The agent now degrades on encoder errors (fused order, unverified answer) instead of failing the request.
 
 Capacity sweep with static routing (sizing):
